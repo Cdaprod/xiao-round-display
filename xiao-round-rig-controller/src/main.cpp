@@ -81,6 +81,7 @@ uint32_t lastTouchAt = 0;
 uint32_t lastWifiRetryAt = 0;
 uint32_t recordingObservedAt = 0;
 bool lastObservedRecording = false;
+String lastUiSignature;
 
 String trimCopy(String value) {
   value.trim();
@@ -135,6 +136,32 @@ int batteryPercent(float volts) {
   return constrain(static_cast<int>(normalized * 100.0f), 0, 100);
 }
 
+bool wifiConfigured() {
+  return config.wifiSsid.length()
+      && config.wifiPassword.length()
+      && config.wifiPassword != "CHANGE_ME";
+}
+
+String uiSignature() {
+  String signature = String(static_cast<int>(rigState)) + "|" + lastError
+      + "|" + String(sdReady ? 1 : 0)
+      + "|" + String(WiFi.status() == WL_CONNECTED ? 1 : 0)
+      + "|" + liveSession.sessionId
+      + "|" + liveSession.status
+      + "|" + liveSession.desiredAction
+      + "|" + String(liveSession.chunkCount);
+
+  // Advance the on-screen recording timer once per second without repainting
+  // the LCD continuously between visible changes.
+  if (rigState == RigState::Recording) {
+    const uint32_t elapsed = recordingObservedAt == 0
+        ? 0
+        : (millis() - recordingObservedAt) / 1000;
+    signature += "|" + String(elapsed);
+  }
+  return signature;
+}
+
 void drawUi() {
   display->fillScreen(COLOR_BLACK);
   const uint16_t accent = stateColor();
@@ -176,6 +203,13 @@ void drawUi() {
   if (liveSession.present) {
     centerText(String("CHUNKS ") + liveSession.chunkCount, 210, 1, COLOR_MUTED);
   }
+}
+
+void redrawUiIfChanged(bool force = false) {
+  const String signature = uiSignature();
+  if (!force && signature == lastUiSignature) return;
+  lastUiSignature = signature;
+  drawUi();
 }
 
 void logEvent(const String &event, const String &detail = "") {
@@ -240,7 +274,7 @@ void initSdCard() {
 }
 
 void connectWifi() {
-  if (!config.wifiSsid.length() || config.wifiPassword == "CHANGE_ME") {
+  if (!wifiConfigured()) {
     rigState = RigState::WifiOffline;
     lastError = "EDIT /rig.cfg";
     return;
@@ -371,7 +405,7 @@ bool sendControlAction(const String &action) {
   serializeJson(body, serialized);
 
   rigState = RigState::Sending;
-  drawUi();
+  redrawUiIfChanged(true);
   const int statusCode = http.POST(serialized);
   const String response = statusCode > 0 ? http.getString() : "";
   http.end();
@@ -428,7 +462,9 @@ void handleTouch() {
 
 void setup() {
   Serial.begin(115200);
-  delay(250);
+  const uint32_t serialWaitStartedAt = millis();
+  while (!Serial && millis() - serialWaitStartedAt < 3000) delay(10);
+  delay(100);
   Serial.println("\nCDAProd XIAO Round Rig Controller");
 
   pinMode(PIN_LCD_BL, OUTPUT);
@@ -441,16 +477,16 @@ void setup() {
     Serial.println("Display initialization failed");
   }
   display->fillScreen(COLOR_BLACK);
-  drawUi();
+  redrawUiIfChanged(true);
 
   initSdCard();
   const bool configLoaded = loadConfig();
   logEvent(configLoaded ? "config_ready" : "config_missing");
-  drawUi();
+  redrawUiIfChanged(true);
 
   connectWifi();
   if (WiFi.status() == WL_CONNECTED) pollLiveSession();
-  drawUi();
+  redrawUiIfChanged(true);
 }
 
 void loop() {
@@ -458,7 +494,7 @@ void loop() {
 
   if (WiFi.status() != WL_CONNECTED) {
     rigState = RigState::WifiOffline;
-    if (millis() - lastWifiRetryAt >= 10000) {
+    if (wifiConfigured() && millis() - lastWifiRetryAt >= 10000) {
       lastWifiRetryAt = millis();
       WiFi.disconnect();
       WiFi.begin(config.wifiSsid.c_str(), config.wifiPassword.c_str());
@@ -470,7 +506,7 @@ void loop() {
 
   if (millis() - lastUiAt >= UI_REFRESH_MS) {
     lastUiAt = millis();
-    drawUi();
+    redrawUiIfChanged();
   }
 
   delay(5);

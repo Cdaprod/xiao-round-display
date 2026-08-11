@@ -2,6 +2,8 @@
 
 Flashable PlatformIO firmware for the **Seeed Studio XIAO ESP32-C3** mounted to the **Seeed Studio 1.28-inch Round Display for XIAO**.
 
+The graphics dependency is deliberately locked to Arduino_GFX `1.6.0`. PlatformIO `espressif32@7.0.1` supplies Arduino-ESP32 `2.0.17`; newer Arduino_GFX releases require the Arduino-ESP32 3.x-only `esp32-hal-periman.h` header.
+
 The dial is the independent camera-rig controller we planned—not the Raspberry Pi monitor. It reads your existing `media-sync-api` live-session state, shows `STANDBY`/`REC`, and sends the existing `start_recording` or `stop_recording` control action when the center is touched.
 
 ## Hardware contract
@@ -52,7 +54,7 @@ Open this directory in VS Code with PlatformIO, connect the XIAO by a USB-C **da
 
 ```bash
 pio run -t upload
-pio device monitor -b 115200
+pio device monitor -p /dev/cu.usbmodem1101 -b 115200
 ```
 
 If upload does not start, enter bootloader mode. With the USB connector on the right as shown in the board photo, the upper tiny button marked `B` is **BOOT** and the other tiny button is **RESET**:
@@ -69,6 +71,13 @@ If upload does not start, enter bootloader mode. With the USB connector on the r
 - `NO SESSION`: the configured camera node has no active `/api/live_sessions` entry.
 - `API OFFLINE`: Wi-Fi works, but `192.168.0.25:8787` is unreachable or returned a non-200 response.
 - `ERROR / TOKEN REQUIRED`: put the camera node's device token in `/rig.cfg`.
+- `NO WIFI / EDIT /rig.cfg`: the card mounted correctly, but `wifi_password`
+  still contains `CHANGE_ME` (or another required Wi-Fi value is blank).
+- `BAT --` while powered only by USB is expected; it does not mean the display
+  or SD card failed.
+
+The UI uses state-based redraws, so the LCD should remain steady while idle and
+update only when status changes (or once per second while recording).
 
 Every SD-backed event is appended to:
 
