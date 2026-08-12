@@ -169,14 +169,18 @@ void StatusHalo::render(uint64_t elapsedUs) {
 
     uint16_t color = paletteColor(static_cast<uint8_t>(sample), transition);
     color = scale565(color, brightness);
-    gfx.writeFillArcHelper(
-        120,
-        120,
-        kOuterRadius,
-        kInnerRadius,
-        start,
-        start + segmentDegrees + 0.7f,
-        color);
+    const float end = start + segmentDegrees + 0.7f;
+    if (end <= 360.0f) {
+      gfx.writeFillArcHelper(
+          120, 120, kOuterRadius, kInnerRadius, start, end, color);
+    } else {
+      // Arduino_GFX does not wrap arc endpoints beyond 360 degrees. Split the
+      // overlap at zero so the final segment closes the halo without a seam.
+      gfx.writeFillArcHelper(
+          120, 120, kOuterRadius, kInnerRadius, start, 360.0f, color);
+      gfx.writeFillArcHelper(
+          120, 120, kOuterRadius, kInnerRadius, 0.0f, end - 360.0f, color);
+    }
   }
   gfx.endWrite();
 }

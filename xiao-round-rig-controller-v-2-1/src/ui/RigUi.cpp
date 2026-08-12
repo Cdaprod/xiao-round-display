@@ -165,21 +165,27 @@ void RigUi::drawDevicePage(Arduino_GFX &gfx) {
       sizeof(node),
       "NODE %.30s",
       snapshot_.nodeId[0] ? snapshot_.nodeId : "NOT SET");
-  centerText(gfx, node, 126, 1, theme::kWhite);
+  centerText(gfx, node, 119, 1, theme::kWhite);
 
   centerText(
       gfx,
-      snapshot_.sdReady ? "SD CONFIG: OK" : "SD CONFIG: --",
-      151,
+      snapshot_.sdReady ? "SD CARD: OK" : "SD CARD: --",
+      142,
       1,
       snapshot_.sdReady ? theme::kGreen : theme::kAmber);
   centerText(
       gfx,
+      snapshot_.configLoaded ? "RIG CONFIG: OK" : "RIG CONFIG: INVALID",
+      162,
+      1,
+      snapshot_.configLoaded ? theme::kGreen : theme::kAmber);
+  centerText(
+      gfx,
       snapshot_.tokenConfigured ? "DEVICE TOKEN: OK" : "DEVICE TOKEN: --",
-      171,
+      182,
       1,
       snapshot_.tokenConfigured ? theme::kGreen : theme::kAmber);
-  centerText(gfx, "TAP: NEXT", 202, 1, theme::kMuted);
+  centerText(gfx, "TAP: NEXT", 205, 1, theme::kMuted);
 }
 
 void RigUi::drawHelpPage(Arduino_GFX &gfx) {

@@ -1,5 +1,10 @@
 # Changelog
 
+# Unreleased
+
+- Split the Device page's SD-card and rig-configuration status indicators.
+- Close the status halo at the 360-degree boundary without removing segment overlap.
+
 ## 2.1.0 - 2026-08-11
 
 - Corrected the hardware target to the Seeed Studio XIAO ESP32-C3.
