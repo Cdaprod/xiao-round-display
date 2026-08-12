@@ -2,6 +2,10 @@
 
 # Unreleased
 
+- Added continuous, testable gesture recognition and inertial panel scrolling.
+- Added expandable category navigation, action panels, keyboard editing, and confirmations.
+- Added Wi-Fi retry diagnostics, asynchronous scanning, and NVS configuration overrides.
+- Pinned Arduino_GFX 1.6.0 and made the 40 MHz compatibility environment the default.
 - Split the Device page's SD-card and rig-configuration status indicators.
 - Close the status halo at the 360-degree boundary without removing segment overlap.
 

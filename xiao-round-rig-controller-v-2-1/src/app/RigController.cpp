@@ -32,10 +32,17 @@ bool RigController::begin() {
   snapshot_.state = RigState::Booting;
   snapshot_.sdReady = storage_.sdReady;
   snapshot_.configLoaded = storage_.configLoaded;
+  snapshot_.configFound = storage_.configFound;
+  snapshot_.configParsed = storage_.configParsed;
+  snapshot_.nvsOverrides = storage_.nvsOverrides;
+  snapshot_.wifiConfigured = config_.wifiConfigured();
+  snapshot_.nodeConfigured = config_.nodeId.length() > 0;
+  snapshot_.apiConfigured = config_.apiBase.startsWith("http://") || config_.apiBase.startsWith("https://");
   snapshot_.tokenConfigured = config_.tokenConfigured();
   copyText(snapshot_.detail, storage_.message);
   copyText(snapshot_.nodeId, config_.nodeId);
   copyText(snapshot_.apiBase, config_.apiBase);
+  copyText(snapshot_.wifiSsid, config_.wifiSsid);
   ui_.begin(snapshot_);
 
   actionQueue_ = xQueueCreate(4, sizeof(ControlAction));
@@ -136,6 +143,7 @@ void RigController::startWifi(uint32_t nowMs) {
     snapshot_.state = RigState::WifiOffline;
     copyText(snapshot_.detail, "EDIT /rig.cfg");
     wifiAttempting_ = false;
+    snapshot_.wifiStage = WifiStage::Unconfigured;
     return;
   }
 
@@ -148,6 +156,8 @@ void RigController::startWifi(uint32_t nowMs) {
   }
 
   wifiAttempting_ = true;
+  wifiRetry_.connecting(nowMs);
+  snapshot_.wifiStage = WifiStage::Connecting;
   wifiAttemptAt_ = nowMs;
   lastWifiRetryAt_ = nowMs;
   snapshot_.state = RigState::WifiConnecting;
@@ -156,13 +166,24 @@ void RigController::startWifi(uint32_t nowMs) {
 }
 
 void RigController::updateWifi(uint32_t nowMs) {
+  const int scanResult = WiFi.scanComplete();
+  if (scanResult == WIFI_SCAN_RUNNING) { snapshot_.wifiStage = WifiStage::Scanning; return; }
+  if (scanResult >= 0) {
+    snapshot_.scanCount = static_cast<uint8_t>(min(scanResult, 5));
+    for (uint8_t i=0;i<snapshot_.scanCount;i++) { copyText(snapshot_.scanSsid[i], WiFi.SSID(i).length()?WiFi.SSID(i):String("<HIDDEN>")); snapshot_.scanRssi[i]=WiFi.RSSI(i); snapshot_.scanSecure[i]=WiFi.encryptionType(i)!=WIFI_AUTH_OPEN; }
+    WiFi.scanDelete();
+  }
   const bool connected = WiFi.status() == WL_CONNECTED;
   snapshot_.wifiConnected = connected;
 
   if (connected) {
     wifiAttempting_ = false;
+    wifiRetry_.connected();
+    snapshot_.wifiStage = WifiStage::Connected;
     snapshot_.wifiRssi = WiFi.RSSI();
     copyText(snapshot_.ipAddress, WiFi.localIP().toString());
+    copyText(snapshot_.gateway, WiFi.gatewayIP().toString());
+    copyText(snapshot_.dns, WiFi.dnsIP().toString());
 
     if (!wifiWasConnected_) {
       wifiWasConnected_ = true;
@@ -182,7 +203,7 @@ void RigController::updateWifi(uint32_t nowMs) {
     snapshot_.sessionPresent = false;
     snapshot_.state = RigState::WifiOffline;
     copyText(snapshot_.detail, "WIFI LOST");
-    lastWifiRetryAt_ = nowMs;
+    wifiRetry_.fail(WifiStage::Disconnected, 0, nowMs);
   }
 
   if (wifiAttempting_ &&
@@ -190,11 +211,23 @@ void RigController::updateWifi(uint32_t nowMs) {
     wifiAttempting_ = false;
     snapshot_.state = RigState::WifiOffline;
     copyText(snapshot_.detail, "CHECK SSID/PASS");
+    wifiRetry_.fail(WifiStage::ConnectionTimeout, 0, nowMs);
+    snapshot_.wifiStage = WifiStage::ConnectionTimeout;
     Serial.println("wifi: connection timed out");
   }
 
-  if (!wifiAttempting_ && config_.wifiConfigured() &&
-      nowMs - lastWifiRetryAt_ >= build::kWifiRetryMs) {
+  if (wifiAttempting_ && WiFi.status() == WL_NO_SSID_AVAIL) {
+    wifiAttempting_ = false; wifiRetry_.fail(WifiStage::NoAccessPoint, 201, nowMs);
+    copyText(snapshot_.wifiReasonText, "AP NOT FOUND"); snapshot_.wifiReason = 201;
+  } else if (wifiAttempting_ && WiFi.status() == WL_CONNECT_FAILED) {
+    wifiAttempting_ = false; wifiRetry_.fail(WifiStage::AuthenticationFailure, 202, nowMs);
+    copyText(snapshot_.wifiReasonText, "AUTH FAILED"); snapshot_.wifiReason = 202;
+  }
+
+  const bool retryDue = wifiRetry_.update(nowMs);
+  snapshot_.wifiStage = wifiRetry_.stage();
+  snapshot_.retrySeconds = wifiRetry_.countdown(nowMs);
+  if (!wifiAttempting_ && config_.wifiConfigured() && retryDue) {
     WiFi.disconnect();
     startWifi(nowMs);
   }
@@ -212,9 +245,14 @@ void RigController::applyApiUpdate(const ApiUpdate &update, uint32_t nowMs) {
   snapshot_.sessionPresent = update.sessionPresent;
   snapshot_.chunkCount = update.chunkCount;
   copyText(snapshot_.sessionId, update.sessionId);
+  copyText(snapshot_.sessionStatus, update.sessionStatus);
+  copyText(snapshot_.desiredAction, update.desiredAction);
+  snapshot_.apiReachable = update.requestOk;
+  snapshot_.requestInProgress = update.state == RigState::Sending;
 
   if (update.error[0]) {
     copyText(snapshot_.detail, update.error);
+    copyText(snapshot_.lastError, update.error);
   } else {
     switch (update.state) {
       case RigState::NoSession: copyText(snapshot_.detail, "NO SESSION - TAP INFO"); break;
@@ -233,35 +271,42 @@ void RigController::applyApiUpdate(const ApiUpdate &update, uint32_t nowMs) {
 
 void RigController::handleTouch(uint32_t nowMs) {
   const TouchEvent event = touch_.poll(nowMs);
-  if (event.kind == TouchKind::None) return;
+  snapshot_.touchHealthy = touch_.healthy();
+  if (event.kind != TouchKind::None) ui_.handleTouch(event);
+  UiCommand command{};
+  if (ui_.takeCommand(command)) handleUiCommand(command, nowMs);
+}
 
-  if (event.kind == TouchKind::LongPress) {
-    ui_.showStatus();
-    return;
+void RigController::handleUiCommand(const UiCommand &command, uint32_t nowMs) {
+  switch (command.action) {
+    case UiAction::RetryWifi: WiFi.disconnect(); wifiRetry_.retryNow(); startWifi(nowMs); break;
+    case UiAction::ScanWifi: snapshot_.wifiStage = WifiStage::Scanning; WiFi.scanNetworks(true); break;
+    case UiAction::SelectWifi:
+      if (snapshot_.scanCount) { configStore_.saveOverride(ConfigField::WifiSsid,snapshot_.scanSsid[0],config_);copyText(snapshot_.wifiSsid,config_.wifiSsid);copyText(snapshot_.detail,"SSID SELECTED - EDIT PASSWORD"); }
+      else copyText(snapshot_.lastError,"SCAN NETWORKS FIRST");
+      break;
+    case UiAction::DisconnectWifi: WiFi.disconnect(); wifiRetry_.fail(WifiStage::Disconnected, 0, nowMs); break;
+    case UiAction::TestApi:
+    case UiAction::PollApi: requestApi(ControlAction::Poll); break;
+    case UiAction::StartRecording: snapshot_.state=RigState::Sending; requestApi(ControlAction::StartRecording); break;
+    case UiAction::StopRecording: snapshot_.state=RigState::Sending; requestApi(ControlAction::StopRecording); break;
+    case UiAction::ClearError: snapshot_.lastError[0]='\0'; break;
+    case UiAction::SaveConfig:
+      if (configStore_.saveOverride(command.field, command.value, config_)) {
+        storage_.nvsOverrides=true; snapshot_.nvsOverrides=true;
+        snapshot_.wifiConfigured=config_.wifiConfigured(); snapshot_.tokenConfigured=config_.tokenConfigured();
+        snapshot_.nodeConfigured=config_.nodeId.length()>0; copyText(snapshot_.wifiSsid,config_.wifiSsid);
+        copyText(snapshot_.nodeId,config_.nodeId); copyText(snapshot_.apiBase,config_.apiBase);
+      } else copyText(snapshot_.lastError,"INVALID VALUE");
+      break;
+    case UiAction::ForgetWifi: configStore_.saveOverride(ConfigField::WifiSsid,"",config_);configStore_.saveOverride(ConfigField::WifiPassword,"",config_);WiFi.disconnect();break;
+    case UiAction::ClearOverrides: configStore_.clearOverrides(); ESP.restart(); break;
+    case UiAction::ReloadSd: configStore_.clearOverrides(); ESP.restart(); break;
+    case UiAction::Reboot: ESP.restart(); break;
+    case UiAction::DisplayTest: copyText(snapshot_.detail,"DISPLAY TEST - TAP"); break;
+    case UiAction::TouchTest: copyText(snapshot_.detail,"TOUCH TEST - HOLD EXIT"); break;
+    case UiAction::None: break;
   }
-
-  const bool canControl = snapshot_.sessionPresent &&
-      (snapshot_.state == RigState::Previewing ||
-       snapshot_.state == RigState::Recording);
-  if (!canControl) {
-    ui_.cyclePage();
-    return;
-  }
-
-  if (!config_.tokenConfigured()) {
-    snapshot_.state = RigState::Error;
-    copyText(snapshot_.detail, "TOKEN REQUIRED");
-    return;
-  }
-
-  const ControlAction action = snapshot_.state == RigState::Recording
-      ? ControlAction::StopRecording
-      : ControlAction::StartRecording;
-  snapshot_.state = RigState::Sending;
-  copyText(
-      snapshot_.detail,
-      action == ControlAction::StopRecording ? "STOP REQUESTED" : "START REQUESTED");
-  requestApi(action);
 }
 
 void RigController::updateTelemetry(uint32_t nowMs) {
@@ -279,7 +324,12 @@ void RigController::updateTelemetry(uint32_t nowMs) {
       nowMs - lastBatteryAt_ >= build::kBatterySampleMs) {
     lastBatteryAt_ = nowMs;
     snapshot_.batteryPercent = batteryPercent(batteryVoltage());
+    snapshot_.batteryMv = static_cast<uint16_t>(batteryVoltage() * 1000.0f);
   }
+  snapshot_.uptimeSeconds = nowMs / 1000;
+  snapshot_.freeHeap = ESP.getFreeHeap();
+  snapshot_.haloFrames = ui_.haloFrames();
+  snapshot_.haloDropped = ui_.haloDropped();
 }
 
 void RigController::requestApi(ControlAction action) {

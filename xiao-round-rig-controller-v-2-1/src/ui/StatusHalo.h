@@ -14,6 +14,7 @@ class StatusHalo {
   void begin(RigState state);
   void setState(RigState state);
   void tick(uint32_t nowUs);
+  void setInteractive(bool value) { interactive_ = value; }
 
   uint32_t renderedFrames() const { return renderedFrames_; }
   uint32_t droppedFrames() const { return droppedFrames_; }
@@ -46,6 +47,7 @@ class StatusHalo {
   uint32_t droppedFrames_ = 0;
   uint64_t lastStatsUs_ = 0;
   uint32_t statsFrameStart_ = 0;
+  bool interactive_ = false;
 };
 
 }  // namespace rig

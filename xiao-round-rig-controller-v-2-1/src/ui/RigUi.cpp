@@ -1,248 +1,45 @@
 #include "ui/RigUi.h"
-
-#include <WiFi.h>
-
+#include <cstdio>
+#include <cstring>
 #include "ui/UiTheme.h"
-
+#include "RigBuildConfig.h"
 namespace rig {
-
-void RigUi::begin(const RigSnapshot &snapshot) {
-  snapshot_ = snapshot;
-  Arduino_GFX &gfx = display_.gfx();
-  gfx.fillScreen(theme::kBlack);
-  gfx.drawCircle(120, 120, 118, theme::kPanel);
-  halo_.begin(snapshot.state);
-  dirty_ = true;
+static const char* tabs[]={"STATUS","NET","DEVICE","CTRL"};
+static const char* statusRows[]={"RETRY FAILED STAGE","REFRESH API","CLEAR LAST ERROR","RETURN TO SUMMARY"};
+static const char* netRows[]={"RETRY NOW","SCAN NETWORKS","SELECT SSID","EDIT SSID","EDIT PASSWORD","EDIT API URL","TEST API","DISCONNECT","FORGET WIFI"};
+static const char* devRows[]={"EDIT NODE ID","EDIT DEVICE TOKEN","EDIT API URL","RELOAD SD CONFIG","CLEAR SAVED OVERRIDES","DISPLAY TEST","TOUCH TEST","REBOOT DEVICE"};
+static const char* ctrlRows[]={"POLL SESSION","START RECORDING","STOP RECORDING","ACKNOWLEDGE ERROR","RETURN TO STATUS"};
+void RigUi::begin(const RigSnapshot&s){snapshot_=s;auto&g=display_.gfx();g.fillScreen(theme::kBlack);halo_.begin(s.state);dirty_=true;}
+void RigUi::updateSnapshot(const RigSnapshot&s){if(!memcmp(&snapshot_,&s,sizeof(s)))return;RigState old=snapshot_.state;snapshot_=s;if(old!=s.state)halo_.setState(s.state);dirty_=true;}
+void RigUi::tick(uint32_t now){static uint32_t last=0;if(mode_==UiMode::Scrolling||scroll_.moving()){scroll_.tick(float(now-last)/1000000.0f);dirty_=true;}if(mode_==UiMode::TabHolding)dirty_=true;if(mode_==UiMode::Expanding&&uint32_t(now-animationAt_)>=220000){mode_=UiMode::Expanded;dirty_=true;}if(mode_==UiMode::Collapsing&&uint32_t(now-animationAt_)>=180000){mode_=UiMode::Summary;dirty_=true;}last=now;halo_.setInteractive(mode_!=UiMode::Summary);if(dirty_)drawContent();halo_.tick(now);}
+void RigUi::handleTouch(const TouchEvent&e){if(e.kind==TouchKind::None)return;if(e.zone==TouchZone::Center&&e.kind==TouchKind::HoldStarted){showStatus();return;}if(mode_==UiMode::Keyboard){if(e.kind==TouchKind::SwipeDown){collapse();return;}if(e.kind==TouchKind::Tap){if(e.y<42){collapse();return;}appendKey((e.y-55)/37*6+(e.x-18)/34);}return;}if(mode_==UiMode::Confirm){if(e.kind==TouchKind::SwipeDown){mode_=UiMode::Expanded;dirty_=true;}else if(e.kind==TouchKind::Tap&&e.y>155){if(e.x<120){mode_=UiMode::Expanded;dirty_=true;}else{int r=confirmRow_;mode_=UiMode::Expanded;if(page_==UiPage::Network&&r==8)queue(UiAction::ForgetWifi);else if(page_==UiPage::Device&&r==4)queue(UiAction::ClearOverrides);else if(page_==UiPage::Device&&r==7)queue(UiAction::Reboot);}}return;}
+ int tab=tabAt(e.startX,e.startY);if(mode_==UiMode::Summary){if(e.kind==TouchKind::Tap){if(tab>=0){if(int(page_)==tab)expand();else{page_=UiPage(tab);dirty_=true;}}else if(e.zone==TouchZone::Center)cyclePage();}else if((e.kind==TouchKind::SwipeUp||e.kind==TouchKind::HoldStarted)&&tab>=0){page_=UiPage(tab);expand();}else if(e.kind==TouchKind::PressStarted&&tab>=0){pressedTab_=tab;animationAt_=e.timestampMs*1000UL;mode_=UiMode::TabHolding;dirty_=true;}return;}
+ if(mode_==UiMode::TabHolding){if(e.kind==TouchKind::HoldStarted&&tab>=0){page_=UiPage(tab);expand();}else if(e.kind==TouchKind::SwipeUp&&tab>=0){page_=UiPage(tab);expand();}else if(e.kind==TouchKind::Tap&&tab>=0){if(int(page_)==tab)expand();else{page_=UiPage(tab);mode_=UiMode::Summary;dirty_=true;}}else if(e.kind==TouchKind::Released||e.kind==TouchKind::Cancelled){mode_=UiMode::Summary;dirty_=true;}return;}
+ if(e.kind==TouchKind::DragStarted){scroll_.beginDrag();mode_=UiMode::Scrolling;}else if(e.kind==TouchKind::DragMoved){scroll_.drag(e.deltaY);dirty_=true;}else if(e.kind==TouchKind::SwipeDown&&scroll_.offset()<=0){collapse();}else if(e.kind==TouchKind::SwipeUp){scroll_.release(e.velocityY);mode_=UiMode::Expanded;}else if(e.kind==TouchKind::Released&&mode_==UiMode::Scrolling){if(scroll_.shouldCollapse())collapse();else{scroll_.release(e.velocityY);mode_=UiMode::Expanded;}}else if(e.kind==TouchKind::Tap){int row=actionAt(e.x,e.y);if(row>=0)executeRow(row);}}
+bool RigUi::takeCommand(UiCommand&c){if(!commandReady_)return false;c=command_;commandReady_=false;return true;}void RigUi::queue(UiAction a){command_={};command_.action=a;commandReady_=true;}
+void RigUi::cyclePage(){page_=UiPage((uint8_t(page_)+1)%4);mode_=UiMode::Summary;dirty_=true;}void RigUi::showStatus(){page_=UiPage::Status;mode_=UiMode::Summary;scroll_.configure(1,1);dirty_=true;}void RigUi::expand(){mode_=UiMode::Expanding;animationAt_=micros();scroll_.configure(126,page_==UiPage::Network?520:440);dirty_=true;}void RigUi::collapse(){mode_=UiMode::Collapsing;animationAt_=micros();dirty_=true;}
+int RigUi::tabAt(uint16_t x,uint16_t y)const{if(y>=185&&y<=220&&x>=24&&x<=216)return (x-24)/48;return -1;}int RigUi::actionAt(uint16_t x,uint16_t y)const{if(x<25||x>215||y<70||y>210)return-1;return scroll_.rowAt(y,112,32,12);}
+void RigUi::openEditor(ConfigField f,const char*v,bool mask){editField_=f;strncpy(edit_,v?v:"",sizeof(edit_)-1);edit_[sizeof(edit_)-1]=0;masked_=mask;reveal_=false;layout_=0;mode_=UiMode::Keyboard;dirty_=true;}
+void RigUi::executeRow(int r){if(page_==UiPage::Status){if(r==0)queue(UiAction::RetryWifi);else if(r==1)queue(UiAction::PollApi);else if(r==2)queue(UiAction::ClearError);else if(r==3)collapse();}
+ else if(page_==UiPage::Network){if(r==0)queue(UiAction::RetryWifi);else if(r==1)queue(UiAction::ScanWifi);else if(r==2)queue(UiAction::SelectWifi);else if(r==3)openEditor(ConfigField::WifiSsid,snapshot_.wifiSsid,false);else if(r==4)openEditor(ConfigField::WifiPassword,"",true);else if(r==5)openEditor(ConfigField::ApiBase,snapshot_.apiBase,false);else if(r==6)queue(UiAction::TestApi);else if(r==7)queue(UiAction::DisconnectWifi);else if(r==8){confirmRow_=r;mode_=UiMode::Confirm;dirty_=true;}}
+ else if(page_==UiPage::Device){if(r==0)openEditor(ConfigField::NodeId,snapshot_.nodeId,false);else if(r==1)openEditor(ConfigField::BearerToken,"",true);else if(r==2)openEditor(ConfigField::ApiBase,snapshot_.apiBase,false);else if(r==3)queue(UiAction::ReloadSd);else if(r==4||r==7){confirmRow_=r;mode_=UiMode::Confirm;dirty_=true;}else if(r==5)queue(UiAction::DisplayTest);else if(r==6)queue(UiAction::TouchTest);}
+ else {if(r==0)queue(UiAction::PollApi);else if(r==1&&!snapshot_.requestInProgress&&snapshot_.sessionPresent&&snapshot_.tokenConfigured&&snapshot_.state!=RigState::Recording)queue(UiAction::StartRecording);else if(r==2&&!snapshot_.requestInProgress&&snapshot_.sessionPresent&&snapshot_.tokenConfigured&&snapshot_.state==RigState::Recording)queue(UiAction::StopRecording);else if(r==3)queue(UiAction::ClearError);else if(r==4)showStatus();}
 }
-
-void RigUi::updateSnapshot(const RigSnapshot &snapshot) {
-  if (memcmp(&snapshot_, &snapshot, sizeof(snapshot_)) == 0) return;
-  const RigState previousState = snapshot_.state;
-  snapshot_ = snapshot;
-  if (snapshot_.state != previousState) {
-    halo_.setState(snapshot_.state);
-  }
-  if (snapshot_.sessionPresent &&
-      (snapshot_.state == RigState::Previewing ||
-       snapshot_.state == RigState::Recording ||
-       snapshot_.state == RigState::Sending)) {
-    page_ = UiPage::Status;
-  }
-  dirty_ = true;
+void RigUi::appendKey(int key){static const char lower[]="abcdefghijklmnopqrstuvwxyz0123456789-._:/";static const char upper[]="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._:/";static const char symbols[]="0123456789!@#$%^&*()-_=+./:?";if(key<0)return;if(key<24){const char*map=layout_==0?lower:layout_==1?upper:symbols;size_t n=strlen(edit_);if(n<sizeof(edit_)-1&&size_t(key)<strlen(map)){edit_[n]=map[key];edit_[n+1]=0;}}else if(key==24){size_t n=strlen(edit_);if(n)edit_[n-1]=0;}else if(key==25){size_t n=strlen(edit_);if(n<sizeof(edit_)-1){edit_[n]=' ';edit_[n+1]=0;}}else if(key==26){edit_[0]=0;}else if(key==27){layout_=(layout_+1)%3;}else if(key==28){reveal_=!reveal_;}else if(key==29){command_={};command_.action=UiAction::SaveConfig;command_.field=editField_;strncpy(command_.value,edit_,sizeof(command_.value)-1);commandReady_=true;mode_=UiMode::Expanded;}else if(key>=30)mode_=UiMode::Expanded;dirty_=true;}
+void RigUi::drawContent(){auto&g=display_.gfx();g.fillCircle(120,120,103,theme::kBlack);if(mode_==UiMode::Keyboard)drawKeyboard(g);else if(mode_==UiMode::Confirm)drawConfirm(g);else if(mode_==UiMode::Summary)drawSummary(g);else drawPanel(g);dirty_=false;}
+void RigUi::drawTabs(Arduino_GFX&g){for(int i=0;i<4;i++){int x=25+i*48;uint16_t c=int(page_)==i?theme::kCyan:theme::kPanel;g.fillRoundRect(x,188,45,25,7,c);if(mode_==UiMode::TabHolding&&pressedTab_==i){uint32_t age=uint32_t(micros()-animationAt_)/1000;g.fillRect(x,211,min(45,int(age*45/450)),3,theme::kAmber);}g.setTextSize(1);g.setTextColor(int(page_)==i?theme::kBlack:theme::kMuted);g.setCursor(x+3,197);g.print(tabs[i]);}}
+void RigUi::drawSummary(Arduino_GFX&g){centerText(g,pageName(),25,1,theme::kMuted);centerText(g,stateLabel(),65,3,stateColor());centerText(g,snapshot_.detail,112,1,theme::kWhite);char b[72];if(page_==UiPage::Network)snprintf(b,sizeof(b),"%s  RETRY %us",wifiStageLabel(snapshot_.wifiStage),snapshot_.retrySeconds);else if(page_==UiPage::Device)snprintf(b,sizeof(b),"SD %s CFG %s NVS %s",snapshot_.sdReady?"OK":"--",snapshot_.configParsed?"OK":"BAD",snapshot_.nvsOverrides?"YES":"NO");else if(page_==UiPage::Help)snprintf(b,sizeof(b),"SESSION %s",snapshot_.sessionPresent?"READY":"NONE");else snprintf(b,sizeof(b),"WIFI %s BAT %d%%",snapshot_.wifiConnected?"OK":"--",snapshot_.batteryPercent);centerText(g,b,145,1,theme::kMuted);drawTabs(g);}
+void RigUi::drawPanel(Arduino_GFX&g){
+ centerText(g,pageName(),16,1,theme::kCyan);char a[96],b[96],c[96],d[96];
+ if(page_==UiPage::Status){snprintf(a,sizeof(a),"STATE %s / WIFI %s",stateLabel(),wifiStageLabel(snapshot_.wifiStage));snprintf(b,sizeof(b),"API %s SESSION %s",snapshot_.apiReachable?"OK":"--",snapshot_.sessionPresent?snapshot_.sessionStatus:"NONE");snprintf(c,sizeof(c),"BAT %umV %d%% UP %lus HEAP %lu",snapshot_.batteryMv,snapshot_.batteryPercent,(unsigned long)snapshot_.uptimeSeconds,(unsigned long)snapshot_.freeHeap);snprintf(d,sizeof(d),"HALO %lu DROP %lu %s %luMHz",(unsigned long)snapshot_.haloFrames,(unsigned long)snapshot_.haloDropped,RIG_ENABLE_DMA?"DMA":"COMPAT",(unsigned long)(RIG_LCD_SPI_HZ/1000000));}
+ else if(page_==UiPage::Network){snprintf(a,sizeof(a),"SSID %.24s",snapshot_.wifiSsid[0]?snapshot_.wifiSsid:"--");snprintf(b,sizeof(b),"%s / %s (%d)",wifiStageLabel(snapshot_.wifiStage),snapshot_.wifiReasonText,snapshot_.wifiReason);snprintf(c,sizeof(c),"IP %s GW %s",snapshot_.ipAddress[0]?snapshot_.ipAddress:"--",snapshot_.gateway[0]?snapshot_.gateway:"--");snprintf(d,sizeof(d),"DNS %s RSSI %d RETRY %us",snapshot_.dns[0]?snapshot_.dns:"--",snapshot_.wifiRssi,snapshot_.retrySeconds);}
+ else if(page_==UiPage::Device){snprintf(a,sizeof(a),"SD %s FILE %s PARSE %s NVS %s",snapshot_.sdReady?"OK":"--",snapshot_.configFound?"YES":"NO",snapshot_.configParsed?"OK":"BAD",snapshot_.nvsOverrides?"YES":"NO");snprintf(b,sizeof(b),"NODE %.25s",snapshot_.nodeConfigured?snapshot_.nodeId:"NOT SET");snprintf(c,sizeof(c),"TOKEN %s API %s",snapshot_.tokenConfigured?"SET":"NOT SET",snapshot_.apiConfigured?"OK":"BAD");snprintf(d,sizeof(d),"HEAP %lu TOUCH %s %s",(unsigned long)snapshot_.freeHeap,snapshot_.touchHealthy?"OK":"--",RIG_ENABLE_DMA?"DMA":"COMPAT");}
+ else {snprintf(a,sizeof(a),"LIVE %s ID %.25s",snapshot_.sessionPresent?"YES":"NO",snapshot_.sessionId);snprintf(b,sizeof(b),"STATE %.20s",snapshot_.sessionStatus);snprintf(c,sizeof(c),"DESIRED %.20s CHUNKS %lu",snapshot_.desiredAction,(unsigned long)snapshot_.chunkCount);snprintf(d,sizeof(d),"TOKEN %s REQUEST %s",snapshot_.tokenConfigured?"SET":"NOT SET",snapshot_.requestInProgress?"BUSY":"READY");}
+ centerText(g,a,34,1,theme::kMuted);centerText(g,b,51,1,theme::kMuted);centerText(g,c,68,1,theme::kMuted);centerText(g,d,85,1,theme::kMuted);
+ const char**rows=page_==UiPage::Status?statusRows:page_==UiPage::Network?netRows:page_==UiPage::Device?devRows:ctrlRows;int count=page_==UiPage::Status?4:page_==UiPage::Network?9:page_==UiPage::Device?8:5;for(int i=0;i<count;i++){int y=112+i*32-int(scroll_.offset());if(y<98||y>213)continue;bool disabled=page_==UiPage::Help&&((i==1&&(!snapshot_.sessionPresent||!snapshot_.tokenConfigured||snapshot_.state==RigState::Recording))||(i==2&&(!snapshot_.sessionPresent||!snapshot_.tokenConfigured||snapshot_.state!=RigState::Recording)));g.fillRoundRect(28,y,184,25,5,disabled?theme::kPanel:theme::kBlue);g.setTextColor(disabled?theme::kMuted:theme::kWhite);g.setTextSize(1);g.setCursor(35,y+8);g.print(rows[i]);if(disabled){g.setCursor(128,y+8);g.print(!snapshot_.sessionPresent?"NO SESSION":!snapshot_.tokenConfigured?"TOKEN REQUIRED":snapshot_.requestInProgress?"BUSY":i==1?"ALREADY REC":"NOT REC");}}
 }
-
-void RigUi::tick(uint32_t nowUs) {
-  if (dirty_) drawContent();
-  halo_.tick(nowUs);
+void RigUi::drawKeyboard(Arduino_GFX&g){centerText(g,"SWIPE DOWN: CANCEL",15,1,theme::kMuted);char shown[25];if(masked_&&!reveal_)snprintf(shown,sizeof(shown),"%.*s",int(strlen(edit_)),"************************");else snprintf(shown,sizeof(shown),"%.24s",edit_);centerText(g,shown,36,1,theme::kWhite);static const char*labels="abcdefghijklmnopqrstuvwx";for(int i=0;i<24;i++){int x=18+(i%6)*34,y=55+(i/6)*37;g.fillRoundRect(x,y,30,30,5,theme::kPanel);g.setCursor(x+11,y+10);g.setTextColor(theme::kWhite);g.print(labels[i]);}centerText(g,"BKSP SPACE CLEAR CASE SHOW OK",207,1,theme::kCyan);}
+void RigUi::drawConfirm(Arduino_GFX&g){centerText(g,"CONFIRM ACTION",55,2,theme::kAmber);centerText(g,"THIS CANNOT BE UNDONE",105,1,theme::kWhite);g.fillRoundRect(25,160,88,36,7,theme::kBlue);g.fillRoundRect(127,160,88,36,7,theme::kRed);g.setCursor(46,174);g.print("CANCEL");g.setCursor(143,174);g.print("CONFIRM");}
+void RigUi::centerText(Arduino_GFX&g,const char*t,int y,uint8_t s,uint16_t c){g.setTextSize(s);g.setTextColor(c);int16_t x1,y1;uint16_t w,h;g.getTextBounds(t,0,y,&x1,&y1,&w,&h);g.setCursor(max(0,(240-int(w))/2-x1),y);g.print(t);}const char*RigUi::pageName()const{return tabs[int(page_)];}
+const char*RigUi::stateLabel()const{switch(snapshot_.state){case RigState::Booting:return"BOOT";case RigState::WifiConnecting:return"JOINING";case RigState::WifiOffline:return"NO WIFI";case RigState::ApiOffline:return"API OFFLINE";case RigState::NoSession:return"RIG READY";case RigState::Previewing:return"STANDBY";case RigState::Recording:return"REC";case RigState::Sending:return"SENDING";case RigState::Error:return"ERROR";}return"UNKNOWN";}uint16_t RigUi::stateColor()const{return snapshot_.state==RigState::Recording||snapshot_.state==RigState::Error?theme::kRed:snapshot_.state==RigState::NoSession||snapshot_.state==RigState::Previewing?theme::kGreen:theme::kAmber;}
 }
-
-void RigUi::cyclePage() {
-  page_ = static_cast<UiPage>((static_cast<uint8_t>(page_) + 1) % 4);
-  dirty_ = true;
-}
-
-void RigUi::showStatus() {
-  if (page_ == UiPage::Status) return;
-  page_ = UiPage::Status;
-  dirty_ = true;
-}
-
-void RigUi::drawContent() {
-  Arduino_GFX &gfx = display_.gfx();
-  gfx.fillCircle(120, 120, 103, theme::kBlack);
-  gfx.drawCircle(120, 120, 102, theme::kPanel);
-  gfx.drawCircle(120, 120, 91, theme::kPanel);
-
-  switch (page_) {
-    case UiPage::Status: drawStatusPage(gfx); break;
-    case UiPage::Network: drawNetworkPage(gfx); break;
-    case UiPage::Device: drawDevicePage(gfx); break;
-    case UiPage::Help: drawHelpPage(gfx); break;
-  }
-  dirty_ = false;
-}
-
-void RigUi::drawStatusPage(Arduino_GFX &gfx) {
-  centerText(gfx, "CDAPROD RIG", 28, 1, theme::kMuted);
-  centerText(
-      gfx,
-      stateLabel(),
-      snapshot_.state == RigState::Recording ? 72 : 79,
-      snapshot_.state == RigState::Recording ? 4 : 3,
-      stateColor());
-
-  char detail[56] = {0};
-  if (snapshot_.state == RigState::Recording) {
-    snprintf(
-        detail,
-        sizeof(detail),
-        "%02lu:%02lu",
-        static_cast<unsigned long>(snapshot_.recordingSeconds / 60),
-        static_cast<unsigned long>(snapshot_.recordingSeconds % 60));
-  } else {
-    snprintf(detail, sizeof(detail), "%.45s", snapshot_.detail);
-  }
-  centerText(
-      gfx,
-      detail,
-      137,
-      snapshot_.state == RigState::Recording ? 2 : 1,
-      theme::kWhite);
-
-  char network[32] = {0};
-  if (snapshot_.wifiConnected) {
-    snprintf(network, sizeof(network), "WIFI %ddBm", snapshot_.wifiRssi);
-  } else {
-    snprintf(network, sizeof(network), "WIFI --");
-  }
-  centerText(
-      gfx,
-      network,
-      174,
-      1,
-      snapshot_.wifiConnected ? theme::kGreen : theme::kMuted);
-
-  char footer[40] = {0};
-  if (snapshot_.batteryPercent >= 0) {
-    snprintf(
-        footer,
-        sizeof(footer),
-        "SD %s  BAT %d%%",
-        snapshot_.sdReady ? "OK" : "--",
-        snapshot_.batteryPercent);
-  } else {
-    snprintf(
-        footer,
-        sizeof(footer),
-        "SD %s  BAT --",
-        snapshot_.sdReady ? "OK" : "--");
-  }
-  centerText(gfx, footer, 193, 1, theme::kMuted);
-
-  if (snapshot_.sessionPresent) {
-    char chunks[28] = {0};
-    snprintf(
-        chunks,
-        sizeof(chunks),
-        "CHUNKS %lu",
-        static_cast<unsigned long>(snapshot_.chunkCount));
-    centerText(gfx, chunks, 210, 1, theme::kMuted);
-  } else {
-    centerText(gfx, "TAP FOR INFO", 210, 1, theme::kMuted);
-  }
-}
-
-void RigUi::drawNetworkPage(Arduino_GFX &gfx) {
-  centerText(gfx, "NETWORK", 31, 1, theme::kMuted);
-  centerText(
-      gfx,
-      snapshot_.wifiConnected ? "ONLINE" : "OFFLINE",
-      72,
-      3,
-      snapshot_.wifiConnected ? theme::kGreen : theme::kAmber);
-
-  char ip[32] = {0};
-  snprintf(ip, sizeof(ip), "IP %.19s", snapshot_.ipAddress[0] ? snapshot_.ipAddress : "--");
-  centerText(gfx, ip, 125, 1, theme::kWhite);
-
-  char rssi[32] = {0};
-  snprintf(rssi, sizeof(rssi), "RSSI %ddBm", snapshot_.wifiRssi);
-  centerText(gfx, rssi, 145, 1, theme::kMuted);
-
-  char api[44] = {0};
-  snprintf(api, sizeof(api), "API %.32s", snapshot_.apiBase);
-  centerText(gfx, api, 171, 1, theme::kMuted);
-  centerText(gfx, "TAP: NEXT", 202, 1, theme::kMuted);
-}
-
-void RigUi::drawDevicePage(Arduino_GFX &gfx) {
-  centerText(gfx, "DEVICE", 31, 1, theme::kMuted);
-  centerText(gfx, "XIAO C3", 70, 3, theme::kCyan);
-
-  char node[44] = {0};
-  snprintf(
-      node,
-      sizeof(node),
-      "NODE %.30s",
-      snapshot_.nodeId[0] ? snapshot_.nodeId : "NOT SET");
-  centerText(gfx, node, 119, 1, theme::kWhite);
-
-  centerText(
-      gfx,
-      snapshot_.sdReady ? "SD CARD: OK" : "SD CARD: --",
-      142,
-      1,
-      snapshot_.sdReady ? theme::kGreen : theme::kAmber);
-  centerText(
-      gfx,
-      snapshot_.configLoaded ? "RIG CONFIG: OK" : "RIG CONFIG: INVALID",
-      162,
-      1,
-      snapshot_.configLoaded ? theme::kGreen : theme::kAmber);
-  centerText(
-      gfx,
-      snapshot_.tokenConfigured ? "DEVICE TOKEN: OK" : "DEVICE TOKEN: --",
-      182,
-      1,
-      snapshot_.tokenConfigured ? theme::kGreen : theme::kAmber);
-  centerText(gfx, "TAP: NEXT", 205, 1, theme::kMuted);
-}
-
-void RigUi::drawHelpPage(Arduino_GFX &gfx) {
-  centerText(gfx, "CONTROLS", 31, 1, theme::kMuted);
-  centerText(gfx, "TOUCH", 69, 3, theme::kViolet);
-  centerText(gfx, "NO SESSION:", 125, 1, theme::kMuted);
-  centerText(gfx, "TAP CYCLES INFO", 143, 1, theme::kWhite);
-  centerText(gfx, "LIVE SESSION:", 165, 1, theme::kMuted);
-  centerText(gfx, "TAP STARTS / STOPS", 183, 1, theme::kWhite);
-  centerText(gfx, "LONG: STATUS", 207, 1, theme::kMuted);
-}
-
-void RigUi::centerText(
-    Arduino_GFX &gfx,
-    const char *text,
-    int y,
-    uint8_t size,
-    uint16_t color) {
-  gfx.setTextSize(size);
-  gfx.setTextColor(color);
-  int16_t x1 = 0;
-  int16_t y1 = 0;
-  uint16_t width = 0;
-  uint16_t height = 0;
-  gfx.getTextBounds(text, 0, y, &x1, &y1, &width, &height);
-  gfx.setCursor(max(0, (240 - static_cast<int>(width)) / 2 - x1), y);
-  gfx.print(text);
-}
-
-const char *RigUi::stateLabel() const {
-  switch (snapshot_.state) {
-    case RigState::Booting: return "BOOT";
-    case RigState::WifiConnecting: return "JOINING";
-    case RigState::WifiOffline: return "NO WIFI";
-    case RigState::ApiOffline: return "API OFFLINE";
-    case RigState::NoSession: return "RIG READY";
-    case RigState::Previewing: return "STANDBY";
-    case RigState::Recording: return "REC";
-    case RigState::Sending: return "SENDING";
-    case RigState::Error: return "ERROR";
-  }
-  return "UNKNOWN";
-}
-
-uint16_t RigUi::stateColor() const {
-  switch (snapshot_.state) {
-    case RigState::Recording: return theme::kRed;
-    case RigState::NoSession:
-    case RigState::Previewing: return theme::kGreen;
-    case RigState::Sending:
-    case RigState::Booting: return theme::kBlue;
-    case RigState::WifiConnecting:
-    case RigState::WifiOffline:
-    case RigState::ApiOffline: return theme::kAmber;
-    case RigState::Error: return theme::kRed;
-  }
-  return theme::kWhite;
-}
-
-}  // namespace rig

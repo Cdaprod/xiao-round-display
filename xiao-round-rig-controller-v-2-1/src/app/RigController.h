@@ -35,6 +35,7 @@ class RigController {
   void handleTouch(uint32_t nowMs);
   void updateTelemetry(uint32_t nowMs);
   void requestApi(ControlAction action);
+  void handleUiCommand(const UiCommand &command, uint32_t nowMs);
   float batteryVoltage() const;
   int batteryPercent(float volts) const;
 
@@ -61,6 +62,7 @@ class RigController {
   uint32_t lastSnapshotAt_ = 0;
   uint32_t lastBatteryAt_ = 0;
   uint32_t recordingStartedAt_ = 0;
+  WifiRetryState wifiRetry_{};
 };
 
 }  // namespace rig

@@ -30,7 +30,7 @@ void StatusHalo::setState(RigState state) {
 }
 
 void StatusHalo::tick(uint32_t nowUs) {
-  constexpr uint32_t frameIntervalUs = 1000000UL / RIG_HALO_TARGET_FPS;
+  const uint32_t frameIntervalUs = 1000000UL / (interactive_ ? 12 : RIG_HALO_TARGET_FPS);
 
   if (!clockStarted_) {
     clockStarted_ = true;
@@ -143,7 +143,7 @@ void StatusHalo::render(uint64_t elapsedUs) {
   if (phaseDegrees < 0.0f) phaseDegrees += 360.0f;
 
   const float breath = 0.79f + 0.21f * (0.5f + 0.5f * sinf(seconds * 1.61f));
-  const uint8_t brightness = static_cast<uint8_t>(breath * 255.0f);
+  const uint8_t brightness = static_cast<uint8_t>(breath * (interactive_ ? 130.0f : 255.0f));
   const float drift = 11.0f * sinf(seconds * 0.23f);
 
   float transition = 1.0f;

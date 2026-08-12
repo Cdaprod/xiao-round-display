@@ -158,3 +158,43 @@ src/
 - status text redraws only when the screen model changes;
 - ring motion uses elapsed time rather than frame count;
 - the render loop performs no heap allocation.
+
+## Expandable interaction
+
+The bottom radial-safe rail exposes `STATUS`, `NET`, `DEVICE`, and `CTRL`. A center tap cycles summaries. Swipe upward or hold a rail category for 450 ms to select and expand it; tapping the selected category also expands it. Expanded panels follow vertical drags, coast with time-based friction, resist overscroll, and collapse after a downward swipe at the top or a 36 px pull. A 700 ms center hold always cancels overlays and returns to Status.
+
+Gesture defaults are 8 px tap tolerance, 14 px drag activation, 180 px/s swipe velocity, 450 ms category hold, and 700 ms center return. Recording actions are accepted only from clean taps on enabled action rows.
+
+## On-device configuration and keyboard
+
+Configuration precedence is safe built-in defaults, `/rig.cfg` imported from SD during boot, then NVS overrides saved by the UI. The display never writes SD while LCD SPI owns the bus. `RELOAD SD CONFIG` and `CLEAR SAVED OVERRIDES` clear NVS and reboot so boot-time SD import remains safe.
+
+Editable rows open a compact keyboard only for the duration of editing. It provides lowercase, uppercase, number/symbol layouts, Backspace, Space, Clear, Cancel, Confirm, and temporary reveal. Passwords and bearer tokens remain masked and are never written to Serial. API URLs must start with `http://` or `https://`.
+
+## Wi-Fi diagnostics and actions
+
+The independent Wi-Fi stage reports unconfigured, scanning, connecting, authenticating, waiting for IP, connected, AP not found, authentication failure, timeout, DHCP failure, disconnected, and retry countdown states. A failure dwells before countdown; `RETRY NOW` bypasses it. Network actions include asynchronous scan, SSID selection/editing, password/API editing, API test, disconnect, and confirmed forget.
+
+## Host tests
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_core.cpp -o /tmp/rig-core-tests && /tmp/rig-core-tests
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_state.cpp -o /tmp/rig-state-tests && /tmp/rig-state-tests
+```
+
+## Physical validation
+
+Discover the current macOS port rather than assuming its suffix:
+
+```bash
+pio device list
+pio run -e seeed_xiao_esp32c3_compat --target clean
+pio run -e seeed_xiao_esp32c3_compat --target upload --upload-port <detected-port>
+pio device monitor --port <detected-port> --baud 115200 --filter time --filter esp32_exception_decoder
+```
+
+Verify: specific boot Wi-Fi stage; stable failure reason and retry countdown; Retry Now; nonblocking scan; tap cycle; swipe selection; tap/hold expansion; inertial scrolling; top swipe collapse; center return; keyboard lifecycle and secret masking; NVS persistence; separate SD/file/parse/field status; recording drag safety; closed animated halo; compatibility stability; and secret-free Serial output.
+
+## Known limitations
+
+Physical touch orientation and the optional DMA renderer require device validation. Network selection chooses the strongest displayed scan result; edit SSID for another result. SD reload intentionally reboots because SD and LCD share SPI. Compatibility mode at 40 MHz/24 FPS is the default; DMA at 80 MHz/30 FPS remains experimental.
