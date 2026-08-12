@@ -1,0 +1,7 @@
+# Copy this file to the SD card root as /rig.cfg.
+wifi_ssid=cda_Lab
+wifi_password=CHANGE_ME
+api_base=http://192.168.0.25:8787
+node_id=CHANGE_ME_CAMERA_NODE_ID
+bearer_token=CHANGE_ME_DEVICE_TOKEN
+poll_ms=1000
