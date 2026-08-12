@@ -157,7 +157,7 @@ void RigUi::drawNetworkPage(Arduino_GFX &gfx) {
 
 void RigUi::drawDevicePage(Arduino_GFX &gfx) {
   centerText(gfx, "DEVICE", 31, 1, theme::kMuted);
-  centerText(gfx, "XIAO S3", 70, 3, theme::kCyan);
+  centerText(gfx, "XIAO C3", 70, 3, theme::kCyan);
 
   char node[44] = {0};
   snprintf(

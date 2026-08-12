@@ -11,7 +11,7 @@
 #endif
 
 #ifndef RIG_HALO_TARGET_FPS
-#define RIG_HALO_TARGET_FPS 60
+#define RIG_HALO_TARGET_FPS 30
 #endif
 
 namespace rig::build {

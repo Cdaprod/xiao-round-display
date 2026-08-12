@@ -47,14 +47,15 @@ bool RigController::begin() {
     return false;
   }
 
-  const BaseType_t taskResult = xTaskCreatePinnedToCore(
+  // The ESP32-C3 is single-core. The worker is a separate FreeRTOS task so
+  // blocking HTTP calls yield cleanly, but it deliberately is not core-pinned.
+  const BaseType_t taskResult = xTaskCreate(
       apiWorkerThunk,
       "rig-api",
       12288,
       this,
       1,
-      &apiWorker_,
-      0);
+      &apiWorker_);
   if (taskResult != pdPASS) {
     snapshot_.state = RigState::Error;
     copyText(snapshot_.detail, "API TASK FAILED");

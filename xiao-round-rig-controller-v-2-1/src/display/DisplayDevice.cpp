@@ -12,7 +12,7 @@ bool DisplayDevice::begin() {
 
 #if RIG_ENABLE_DMA
   // The SD card has already been unmounted before this is called, so the
-  // display can exclusively own FSPI and keep it acquired for fast frames.
+  // display can exclusively own the ESP32-C3 FSPI host for fast transfers.
   bus_ = new Arduino_ESP32SPIDMA(
       build::kPinLcdDc,
       build::kPinLcdCs,

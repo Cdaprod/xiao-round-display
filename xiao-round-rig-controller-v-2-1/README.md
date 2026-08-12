@@ -1,6 +1,6 @@
 # CDAProd XIAO Round Rig Controller
 
-Native firmware for the Seeed Studio XIAO ESP32S3 mounted on the Seeed XIAO Round Display:
+Native firmware for the Seeed Studio XIAO ESP32-C3 mounted on the Seeed XIAO Round Display:
 
 - 240x240 GC9A01 LCD
 - CHSC6X capacitive touch controller at `0x2E`
@@ -13,9 +13,13 @@ Native firmware for the Seeed Studio XIAO ESP32S3 mounted on the Seeed XIAO Roun
 
 The original single-file sketch has been separated into display, UI, touch, storage, API, and application-controller modules. The runtime now keeps three different schedules independent:
 
-- the halo is presented at a target of 60 FPS;
+- the halo is presented at a target of 30 FPS;
 - visible status content redraws only when its data changes;
 - blocking HTTP work runs on a separate FreeRTOS task.
+
+The C3 has one CPU core. The API worker therefore prevents network calls from
+blocking the UI loop through FreeRTOS scheduling; it does not run on a second
+physical core.
 
 The ring uses a continuously moving baseline plus a cubic-Bezier orbital lap. It never fully stops at the loop seam. Brightness breathes independently, colors drift, and palettes crossfade when state changes.
 
@@ -76,20 +80,20 @@ pio device monitor -b 115200
 
 The normal environment uses:
 
-- 240 MHz ESP32-S3 CPU through the board platform defaults;
+- 160 MHz ESP32-C3 CPU through the board platform defaults;
 - 80 MHz LCD SPI;
 - `Arduino_ESP32SPIDMA`;
-- 60 FPS halo presentation target;
+- 30 FPS halo presentation target;
 - `-O3` compiler optimization.
 
 If the particular display/cable/build is unstable at 80 MHz, use the included compatibility environment:
 
 ```bash
-pio run -e seeed_xiao_esp32s3_compat
-pio run -e seeed_xiao_esp32s3_compat --target upload
+pio run -e seeed_xiao_esp32c3_compat
+pio run -e seeed_xiao_esp32c3_compat --target upload
 ```
 
-That environment uses conventional SPI at 40 MHz and a 45 FPS target.
+That environment uses conventional SPI at 40 MHz and a 24 FPS target.
 
 ## API contract
 
@@ -126,7 +130,7 @@ The session endpoint may return either a top-level JSON array or `{ "items": [..
 Every five seconds the serial monitor prints the measured presentation rate:
 
 ```text
-[halo] 60.0 presented fps, 0 dropped, dma=on
+[halo] 30.0 presented fps, 0 dropped, dma=on
 ```
 
 This is the meaningful embedded measurement. The animation position is time-based, so a missed deadline advances to the correct point instead of making the motion run slowly.
