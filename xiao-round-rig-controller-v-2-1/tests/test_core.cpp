@@ -12,6 +12,8 @@ int main(){
  {GestureRecognizer r;r.sample(true,true,100,100,0,TouchZone::Category);assert(r.sample(true,true,100,100,450).kind==TouchKind::HoldStarted);assert(r.sample(true,true,100,100,500).kind==TouchKind::None);assert(r.sample(false,true,100,100,510).kind==TouchKind::Released);}
  {GestureRecognizer r;r.sample(true,true,100,150,0);r.sample(true,true,100,80,50);assert(r.sample(false,true,100,80,55).kind==TouchKind::SwipeUp);}
  {GestureRecognizer r;r.sample(true,true,100,80,0);r.sample(true,true,100,150,50);assert(r.sample(false,true,100,150,55).kind==TouchKind::SwipeDown);}
+ {GestureRecognizer r;r.sample(true,true,180,100,0);r.sample(true,true,80,100,50);assert(r.sample(false,true,80,100,55).kind==TouchKind::SwipeLeft);}
+ {GestureRecognizer r;r.sample(true,true,80,100,0);r.sample(true,true,180,100,50);assert(r.sample(false,true,180,100,55).kind==TouchKind::SwipeRight);}
  {GestureRecognizer r;r.sample(true,true,100,100,0);r.sample(true,true,100,120,1000);assert(r.sample(false,true,100,120,1100).kind==TouchKind::Released);}
  {GestureRecognizer r;assert(r.sample(true,false,0,0,0).kind==TouchKind::None);assert(r.sample(false,true,0,0,10).kind==TouchKind::None);}
  {GestureRecognizer r;r.sample(true,true,120,120,0,TouchZone::Center);assert(r.sample(true,true,120,120,699).kind==TouchKind::None);assert(r.sample(true,true,120,120,700).kind==TouchKind::HoldStarted);}

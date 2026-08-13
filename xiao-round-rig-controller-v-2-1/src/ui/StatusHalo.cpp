@@ -29,6 +29,24 @@ void StatusHalo::setState(RigState state) {
   transitionStartedUs_ = elapsedUs_;
 }
 
+void StatusHalo::setTouchFeedback(
+    bool active,
+    uint16_t x,
+    uint16_t y,
+    uint16_t progress,
+    bool dragging) {
+  touchActive_ = active;
+  touchX_ = x;
+  touchY_ = y;
+  touchProgress_ = progress;
+  touchDragging_ = dragging;
+}
+
+void StatusHalo::setOutcomeFeedback(bool success) {
+  outcome_ = success ? 1 : -1;
+  outcomeStartedUs_ = elapsedUs_;
+}
+
 void StatusHalo::tick(uint32_t nowUs) {
   const uint32_t frameIntervalUs = 1000000UL / (interactive_ ? 12 : RIG_HALO_TARGET_FPS);
 
@@ -182,7 +200,52 @@ void StatusHalo::render(uint64_t elapsedUs) {
           120, 120, kOuterRadius, kInnerRadius, 0.0f, end - 360.0f, color);
     }
   }
+  if (touchActive_) {
+    float angle = atan2f(
+        static_cast<float>(touchY_) - 120.0f,
+        static_cast<float>(touchX_) - 120.0f) * 180.0f / PI + 90.0f;
+    if (angle < 0.0f) angle += 360.0f;
+    const float width = touchDragging_ ? 24.0f : 12.0f + touchProgress_ * 0.020f;
+    fillWrappedArc(gfx, angle - width, angle + width, theme::kWhite);
+    float echo = fmodf(angle + 180.0f, 360.0f);
+    fillWrappedArc(gfx, echo - 5.0f, echo + 5.0f, theme::kCyan);
+  }
+  if (outcome_ != 0) {
+    const uint64_t age = elapsedUs_ - outcomeStartedUs_;
+    if (age < 600000ULL) {
+      const float sweep = static_cast<float>(age) / 600000.0f * 360.0f;
+      gfx.writeFillArcHelper(
+          120, 120, kOuterRadius, kInnerRadius, 0.0f, sweep,
+          outcome_ > 0 ? theme::kGreen : theme::kAmber);
+    } else {
+      outcome_ = 0;
+    }
+  }
   gfx.endWrite();
+}
+
+void StatusHalo::fillWrappedArc(
+    Arduino_GFX &gfx,
+    float start,
+    float end,
+    uint16_t color) const {
+  while (start < 0.0f) {
+    start += 360.0f;
+    end += 360.0f;
+  }
+  while (start >= 360.0f) {
+    start -= 360.0f;
+    end -= 360.0f;
+  }
+  if (end <= 360.0f) {
+    gfx.writeFillArcHelper(
+        120, 120, kOuterRadius, kInnerRadius, start, end, color);
+    return;
+  }
+  gfx.writeFillArcHelper(
+      120, 120, kOuterRadius, kInnerRadius, start, 360.0f, color);
+  gfx.writeFillArcHelper(
+      120, 120, kOuterRadius, kInnerRadius, 0.0f, end - 360.0f, color);
 }
 
 float StatusHalo::cubicBezier(

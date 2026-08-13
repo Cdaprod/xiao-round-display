@@ -32,3 +32,11 @@
 - Changed connected/no-session state to green `RIG READY` while keeping offline states amber.
 - Preserved `/rig.cfg`, Media Sync API routes, device headers, battery display, and session controls.
 - Added a 40 MHz non-DMA compatibility build environment.
+
+## Unreleased compositor redesign
+
+- Removed the persistent bottom category bar; each circular summary is now its category.
+- Added horizontal summary navigation, title/swipe/hold expansion, full circular panels, pinned back headers, and restrained action rows.
+- Replaced visible direct erase/redraw with a one-time allocated indexed compositor and circular scanline transfers.
+- Added shared round viewport geometry for rendering and hit testing, granular invalidation, render counters, and tactile perimeter feedback.
+- Integrated keyboard and confirmation modes into the same compositor while preserving panel scroll state.

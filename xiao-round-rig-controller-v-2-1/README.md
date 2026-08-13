@@ -161,9 +161,9 @@ src/
 
 ## Expandable interaction
 
-The bottom radial-safe rail exposes `STATUS`, `NET`, `DEVICE`, and `CTRL`. A center tap cycles summaries. Swipe upward or hold a rail category for 450 ms to select and expand it; tapping the selected category also expands it. Expanded panels follow vertical drags, coast with time-based friction, resist overscroll, and collapse after a downward swipe at the top or a 36 px pull. A 700 ms center hold always cancels overlays and returns to Status.
+The entire circular summary is the active category. Tap empty space to cycle, swipe horizontally for the previous or next category, and tap the title, swipe up, or hold for 450 ms to expand. Expanded panels follow vertical drags, coast with time-based friction, resist overscroll, and collapse after a downward swipe at the top or a 36 px pull. A 700 ms center hold always cancels overlays and returns to Status.
 
-Gesture defaults are 8 px tap tolerance, 14 px drag activation, 180 px/s swipe velocity, 450 ms category hold, and 700 ms center return. Recording actions are accepted only from clean taps on enabled action rows.
+Gesture defaults are 8 px tap tolerance, 14 px drag activation, 180 px/s swipe velocity, 450 ms expansion hold, and 700 ms center return. Recording actions are accepted only from clean taps on enabled action rows.
 
 ## On-device configuration and keyboard
 
@@ -198,3 +198,30 @@ Verify: specific boot Wi-Fi stage; stable failure reason and retry countdown; Re
 ## Known limitations
 
 Physical touch orientation and the optional DMA renderer require device validation. Network selection chooses the strongest displayed scan result; edit SSID for another result. SD reload intentionally reboots because SD and LCD share SPI. Compatibility mode at 40 MHz/24 FPS is the default; DMA at 80 MHz/30 FPS remains experimental.
+
+## Composited round interface
+
+Each full circular summary is its category; there is no persistent category bar. Tap empty summary space to advance, swipe horizontally to move backward or forward, and tap the title, swipe up, or hold for 450 ms to expand. Expanded views use a pinned `< CATEGORY` header and the complete 108 px content radius. Tap the header, swipe down at the top, or pull down 36 px to collapse. A 700 ms center hold always returns to Status.
+
+Non-halo content is drawn to a one-time allocated 240×240 8-bit indexed surface and then transferred as legal circular scanline spans. The halo independently owns its perimeter. This prevents users from seeing erase/redraw phases and prevents rectangular or stale pixels outside the circular viewport. Startup logs indexed-surface heap use; a clipped direct-span fallback is retained for allocation failure. Rendering architecture and ownership are documented in `docs/architecture/UI_COMPOSITOR.md`.
+
+Contact feedback starts on touch-down: the contacted title or row is accented and the halo blooms at the touch angle with an opposite-side echo. Hold progress grows before activation; drag cancels tap feedback. Content diagnostics are rate-limited and include redraw counts, composition/transfer time, maximum touch interval, and minimum heap.
+
+### Compositor host test
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_ui_architecture.cpp -o /tmp/rig-ui-tests && /tmp/rig-ui-tests
+```
+
+### Physical compositor acceptance
+
+1. No bottom category bar is visible.
+2. Each circular summary is the category and tap cycles summaries.
+3. Horizontal swipe moves previous/next; title tap, swipe up, and visible hold expand.
+4. Expanded content uses the full round viewport and every final action scrolls fully into view.
+5. Header and top swipe collapse; center long-press returns to Status.
+6. The center remains solid for 30 seconds while halo and retry countdown continue.
+7. No stale text, rectangular edges, blue button stack, or black transition frame appears.
+8. Contact feedback is visible beyond the thumb before release; drags never confirm taps.
+9. Keyboard and confirmation transitions leave no stale pixels and restore panel scroll.
+10. Halo remains closed/fluid, retries/scans remain responsive, and Serial contains no credentials.

@@ -2,7 +2,7 @@
 #include <cstdint>
 
 namespace rig {
-enum class TouchKind : uint8_t { None, PressStarted, DragStarted, DragMoved, SwipeUp, SwipeDown, Tap, HoldStarted, Released, Cancelled };
+enum class TouchKind : uint8_t { None, PressStarted, DragStarted, DragMoved, SwipeUp, SwipeDown, SwipeLeft, SwipeRight, Tap, HoldStarted, Released, Cancelled };
 enum class TouchZone : uint8_t { Outside, Center, Category };
 struct TouchEvent {
   TouchKind kind = TouchKind::None; TouchZone zone = TouchZone::Outside;
@@ -30,7 +30,9 @@ class GestureRecognizer {
     if (!down && active_) {
       TouchEvent e=make(TouchKind::Released,px_,py_,now); active_=false;
       if (dragging_) {
-        if (-e.velocityY>=thresholds_.swipeVelocity) e.kind=TouchKind::SwipeUp;
+        if (abs16(e.velocityX) > abs16(e.velocityY) && -e.velocityX>=thresholds_.swipeVelocity) e.kind=TouchKind::SwipeLeft;
+        else if (abs16(e.velocityX) > abs16(e.velocityY) && e.velocityX>=thresholds_.swipeVelocity) e.kind=TouchKind::SwipeRight;
+        else if (-e.velocityY>=thresholds_.swipeVelocity) e.kind=TouchKind::SwipeUp;
         else if (e.velocityY>=thresholds_.swipeVelocity) e.kind=TouchKind::SwipeDown;
       } else if (!held_ && abs16(e.totalX)<=thresholds_.tapMovement && abs16(e.totalY)<=thresholds_.tapMovement) e.kind=TouchKind::Tap;
       return e;

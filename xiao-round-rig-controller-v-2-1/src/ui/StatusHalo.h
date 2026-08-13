@@ -15,6 +15,13 @@ class StatusHalo {
   void setState(RigState state);
   void tick(uint32_t nowUs);
   void setInteractive(bool value) { interactive_ = value; }
+  void setTouchFeedback(
+      bool active,
+      uint16_t x,
+      uint16_t y,
+      uint16_t progress,
+      bool dragging);
+  void setOutcomeFeedback(bool success);
 
   uint32_t renderedFrames() const { return renderedFrames_; }
   uint32_t droppedFrames() const { return droppedFrames_; }
@@ -31,6 +38,11 @@ class StatusHalo {
   uint16_t paletteColor(uint8_t index, float transition) const;
   uint16_t blend565(uint16_t from, uint16_t to, uint8_t amount) const;
   uint16_t scale565(uint16_t color, uint8_t brightness) const;
+  void fillWrappedArc(
+      Arduino_GFX &gfx,
+      float start,
+      float end,
+      uint16_t color) const;
 
   DisplayDevice &display_;
   RigState state_ = RigState::Booting;
@@ -48,6 +60,13 @@ class StatusHalo {
   uint64_t lastStatsUs_ = 0;
   uint32_t statsFrameStart_ = 0;
   bool interactive_ = false;
+  bool touchActive_ = false;
+  bool touchDragging_ = false;
+  uint16_t touchX_ = 120;
+  uint16_t touchY_ = 120;
+  uint16_t touchProgress_ = 0;
+  int8_t outcome_ = 0;
+  uint64_t outcomeStartedUs_ = 0;
 };
 
 }  // namespace rig
