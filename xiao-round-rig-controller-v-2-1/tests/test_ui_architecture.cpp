@@ -5,6 +5,7 @@
 #include "../src/ui/UiInvalidation.h"
 using namespace rig;
 int main(){
+ HorizontalSpan explicitSpan(7, 19);assert(explicitSpan.valid()&&explicitSpan.left==7&&explicitSpan.right==19&&explicitSpan.width()==13);HorizontalSpan invalidSpan;assert(!invalidSpan.valid()&&invalidSpan.width()==0);
  CircularViewport summary(CircularViewport::kSummaryRadius),expanded(CircularViewport::kExpandedRadius);
  assert(summary.radius()==103&&expanded.radius()==108);
  for(int y=0;y<240;y++){for(auto*v:{&summary,&expanded}){auto s=v->span(y);assert(!s.valid()||(s.left>=0&&s.right<=239&&s.left<=s.right));}}

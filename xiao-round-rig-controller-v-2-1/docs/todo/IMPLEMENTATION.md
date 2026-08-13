@@ -2,6 +2,7 @@
 
 ## Completed
 
+- [x] Restore ESP32 GCC 8 compatibility with explicit circular-span construction and type-safe span-width arithmetic.
 - [x] Remove the persistent bottom category bar and make each summary the full circular category.
 - [x] Add tap cycling, horizontal previous/next swipes, title/swipe/hold expansion, pinned panel headers, and universal center return.
 - [x] Replace direct center erase/redraw with a one-time allocated indexed compositor and atomic circular span presentation.
