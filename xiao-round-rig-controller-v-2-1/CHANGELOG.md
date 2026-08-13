@@ -35,6 +35,7 @@
 
 ## Unreleased compositor redesign
 
+- Fixed GCC 8/C++11 parsing of the ConfigStore default argument and ConfigStatus construction.
 - Replaced per-frame arc rasterization with precomputed annular pixel/angle LUTs and two-span halo transfers; added safe credential provenance diagnostics and Wi-Fi override clearing.
 - Repaired dirty-row transfers, coalesced halo deadlines, bounded 24 FPS touch feedback, and nonblocking Wi-Fi attempt diagnostics.
 - Fixed ESP32 GCC 8 compilation by explicitly constructing circular spans and normalizing span-width arithmetic to `int`.

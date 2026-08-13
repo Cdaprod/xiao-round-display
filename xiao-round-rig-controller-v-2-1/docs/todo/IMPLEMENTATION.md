@@ -2,6 +2,7 @@
 
 ## Completed
 
+- [x] Fix ConfigStore and ConfigPolicy GCC 8/C++11 compilation regressions with named declarations and explicit status assignment.
 - [x] Replace arc-helper halo rendering with precomputed annular geometry, palette mapping, and disjoint span presentation.
 - [x] Add secret-safe Wi-Fi credential provenance, length, fingerprint, generation, retry timing, and override clearing.
 - [x] Make semantic row invalidation and bounded span transfers operational; coalesce expired halo/feedback frames.
