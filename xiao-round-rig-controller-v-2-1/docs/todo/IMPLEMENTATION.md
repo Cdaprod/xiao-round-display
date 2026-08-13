@@ -22,6 +22,8 @@
 
 ## Hardware validation remaining
 
+- [ ] Capture a 60-second physical telemetry baseline from the current halo LUT build before implementing the single presentation scheduler.
+- [ ] Implement `UiPresentationScheduler` as a separate measured commit only after the build and baseline gates pass.
 - [ ] Measure halo rasterization below 5 ms, total presentation below 30 ms, and stable 24 FPS without accumulating coalesced deadlines.
 - [ ] Compare two-span halo presentation against a center-preserving single-span strategy on hardware before changing the safe default.
 - [ ] Run the physical compositor acceptance checklist in `README.md` using compatibility mode.
