@@ -2,6 +2,8 @@
 
 ## Completed
 
+- [x] Make semantic row invalidation and bounded span transfers operational; coalesce expired halo/feedback frames.
+- [x] Add Wi-Fi attempt/status/stage/elapsed/reason diagnostics without restarting active attempts.
 - [x] Restore ESP32 GCC 8 compatibility with explicit circular-span construction and type-safe span-width arithmetic.
 - [x] Remove the persistent bottom category bar and make each summary the full circular category.
 - [x] Add tap cycling, horizontal previous/next swipes, title/swipe/hold expansion, pinned panel headers, and universal center return.

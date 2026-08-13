@@ -139,6 +139,7 @@ void RigController::apiWorkerLoop() {
 }
 
 void RigController::startWifi(uint32_t nowMs) {
+  if (wifiAttempting_) return;
   if (!config_.wifiConfigured()) {
     snapshot_.state = RigState::WifiOffline;
     copyText(snapshot_.detail, "EDIT /rig.cfg");
@@ -156,13 +157,14 @@ void RigController::startWifi(uint32_t nowMs) {
   }
 
   wifiAttempting_ = true;
+  ++wifiAttemptNumber_;
   wifiRetry_.connecting(nowMs);
   snapshot_.wifiStage = WifiStage::Connecting;
   wifiAttemptAt_ = nowMs;
   lastWifiRetryAt_ = nowMs;
   snapshot_.state = RigState::WifiConnecting;
   copyText(snapshot_.detail, String("JOINING ") + config_.wifiSsid);
-  Serial.printf("wifi: joining %s\n", config_.wifiSsid.c_str());
+  Serial.printf("wifi: attempt=%lu status=%d stage=connecting elapsed=0ms ssid=%s\n", static_cast<unsigned long>(wifiAttemptNumber_), static_cast<int>(WiFi.status()), config_.wifiSsid.c_str());
 }
 
 void RigController::updateWifi(uint32_t nowMs) {
@@ -173,7 +175,13 @@ void RigController::updateWifi(uint32_t nowMs) {
     for (uint8_t i=0;i<snapshot_.scanCount;i++) { copyText(snapshot_.scanSsid[i], WiFi.SSID(i).length()?WiFi.SSID(i):String("<HIDDEN>")); snapshot_.scanRssi[i]=WiFi.RSSI(i); snapshot_.scanSecure[i]=WiFi.encryptionType(i)!=WIFI_AUTH_OPEN; }
     WiFi.scanDelete();
   }
-  const bool connected = WiFi.status() == WL_CONNECTED;
+  const int wifiStatus = static_cast<int>(WiFi.status());
+  if (wifiStatus != lastWifiStatus_ || nowMs - lastWifiDiagnosticAt_ >= 2000) {
+    lastWifiStatus_ = wifiStatus;
+    lastWifiDiagnosticAt_ = nowMs;
+    Serial.printf("wifi: attempt=%lu status=%d stage=%s elapsed=%lums reason=%d\n", static_cast<unsigned long>(wifiAttemptNumber_), wifiStatus, wifiStageLabel(wifiRetry_.stage()), static_cast<unsigned long>(wifiAttempting_ ? nowMs - wifiAttemptAt_ : 0), wifiRetry_.reason());
+  }
+  const bool connected = wifiStatus == WL_CONNECTED;
   snapshot_.wifiConnected = connected;
 
   if (connected) {
@@ -189,7 +197,7 @@ void RigController::updateWifi(uint32_t nowMs) {
       wifiWasConnected_ = true;
       snapshot_.state = RigState::NoSession;
       copyText(snapshot_.detail, "CONTACTING API");
-      Serial.printf("wifi: ready %s\n", snapshot_.ipAddress);
+      Serial.printf("wifi: association=complete dhcp=complete ip=%s elapsed=%lums\n", snapshot_.ipAddress, static_cast<unsigned long>(nowMs - wifiAttemptAt_));
       requestApi(ControlAction::Poll);
     }
     return;

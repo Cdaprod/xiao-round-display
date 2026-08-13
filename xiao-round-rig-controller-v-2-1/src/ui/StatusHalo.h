@@ -25,6 +25,8 @@ class StatusHalo {
 
   uint32_t renderedFrames() const { return renderedFrames_; }
   uint32_t droppedFrames() const { return droppedFrames_; }
+  uint32_t renderUs() const { return renderUs_; }
+  uint32_t maxRenderUs() const { return maxRenderUs_; }
 
  private:
   static constexpr size_t kPaletteSize = 256;
@@ -59,6 +61,8 @@ class StatusHalo {
   uint32_t droppedFrames_ = 0;
   uint64_t lastStatsUs_ = 0;
   uint32_t statsFrameStart_ = 0;
+  uint32_t renderUs_ = 0;
+  uint32_t maxRenderUs_ = 0;
   bool interactive_ = false;
   bool touchActive_ = false;
   bool touchDragging_ = false;

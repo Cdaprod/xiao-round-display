@@ -48,7 +48,7 @@ void StatusHalo::setOutcomeFeedback(bool success) {
 }
 
 void StatusHalo::tick(uint32_t nowUs) {
-  const uint32_t frameIntervalUs = 1000000UL / (interactive_ ? 12 : RIG_HALO_TARGET_FPS);
+  const uint32_t frameIntervalUs = 1000000UL / RIG_HALO_TARGET_FPS;
 
   if (!clockStarted_) {
     clockStarted_ = true;
@@ -65,17 +65,24 @@ void StatusHalo::tick(uint32_t nowUs) {
 
   const uint32_t dueFrames = frameAccumulatorUs_ / frameIntervalUs;
   if (dueFrames > 1) droppedFrames_ += dueFrames - 1;
-  frameAccumulatorUs_ %= frameIntervalUs;
+  // Coalesce expired deadlines. The elapsed-time phase already points at the
+  // newest frame, so retaining queued intervals only causes bursty catch-up.
+  frameAccumulatorUs_ = 0;
+  const uint32_t renderStartedUs = micros();
   render(elapsedUs_);
+  renderUs_ = micros() - renderStartedUs;
+  if (renderUs_ > maxRenderUs_) maxRenderUs_ = renderUs_;
   ++renderedFrames_;
 
   if (elapsedUs_ - lastStatsUs_ >= 5000000ULL) {
     const uint32_t frames = renderedFrames_ - statsFrameStart_;
     const float seconds = static_cast<float>(elapsedUs_ - lastStatsUs_) / 1000000.0f;
     Serial.printf(
-        "[halo] %.1f presented fps, %lu dropped, dma=%s\n",
+        "[halo] %.1f presented fps, %lu coalesced, render=%lu/%luus dma=%s\n",
         frames / seconds,
         static_cast<unsigned long>(droppedFrames_),
+        static_cast<unsigned long>(renderUs_),
+        static_cast<unsigned long>(maxRenderUs_),
         display_.dmaEnabled() ? "on" : "off");
     statsFrameStart_ = renderedFrames_;
     lastStatsUs_ = elapsedUs_;

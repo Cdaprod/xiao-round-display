@@ -58,6 +58,9 @@ class RigController {
   bool wifiWasConnected_ = false;
   bool recordingObserved_ = false;
   uint32_t wifiAttemptAt_ = 0;
+  uint32_t wifiAttemptNumber_ = 0;
+  uint32_t lastWifiDiagnosticAt_ = 0;
+  int lastWifiStatus_ = -1;
   uint32_t lastWifiRetryAt_ = 0;
   uint32_t lastSnapshotAt_ = 0;
   uint32_t lastBatteryAt_ = 0;

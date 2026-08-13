@@ -35,6 +35,7 @@
 
 ## Unreleased compositor redesign
 
+- Repaired dirty-row transfers, coalesced halo deadlines, bounded 24 FPS touch feedback, and nonblocking Wi-Fi attempt diagnostics.
 - Fixed ESP32 GCC 8 compilation by explicitly constructing circular spans and normalizing span-width arithmetic to `int`.
 - Removed the persistent bottom category bar; each circular summary is now its category.
 - Added horizontal summary navigation, title/swipe/hold expansion, full circular panels, pinned back headers, and restrained action rows.

@@ -25,3 +25,7 @@ The display now has explicit ownership:
 ## Performance telemetry
 
 Rate-limited Serial diagnostics report full, viewport, row and feedback redraw counts, composition and transfer time, maximum observed touch interval, and minimum heap. Status diagnostics retain halo frame/drop counters. No compositor or feedback allocation occurs after startup.
+
+## Dirty-span repair
+
+Semantic snapshot comparison now maps retry-only changes to their visible text rows. `UiInvalidation` retains the union of dirty scanlines, and `UiCompositor::present()` transfers only those circular spans. Contact feedback is capped at the configured 24 FPS and transfers a bounded 36-pixel-high region. Transition frames remain full compositions and pause ambient halo presentation; idle and halo-only ticks perform no content transfer. Expired halo deadlines are coalesced into the newest elapsed-time phase rather than queued for catch-up.
