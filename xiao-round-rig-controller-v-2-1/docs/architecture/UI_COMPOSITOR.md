@@ -29,3 +29,7 @@ Rate-limited Serial diagnostics report full, viewport, row and feedback redraw c
 ## Dirty-span repair
 
 Semantic snapshot comparison now maps retry-only changes to their visible text rows. `UiInvalidation` retains the union of dirty scanlines, and `UiCompositor::present()` transfers only those circular spans. Contact feedback is capped at the configured 24 FPS and transfers a bounded 36-pixel-high region. Transition frames remain full compositions and pause ambient halo presentation; idle and halo-only ticks perform no content transfer. Expired halo deadlines are coalesced into the newest elapsed-time phase rather than queued for catch-up.
+
+## Halo LUT renderer
+
+The halo no longer invokes arc rasterization during animation. `HaloGeometry` precomputes compact framebuffer offsets, angular indices, and the two annular spans for every scanline once. Each frame builds one 256-color RGB565 palette, maps approximately 5,000 annular pixels by `(angle + phase) & 0xff`, and transfers only the left/right halo spans. Halo logs separately report raster time, transfer time, coalesced deadlines, and bytes per second. Compatibility performance remains subject to physical measurement.

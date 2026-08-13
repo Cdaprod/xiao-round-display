@@ -2,6 +2,8 @@
 
 ## Completed
 
+- [x] Replace arc-helper halo rendering with precomputed annular geometry, palette mapping, and disjoint span presentation.
+- [x] Add secret-safe Wi-Fi credential provenance, length, fingerprint, generation, retry timing, and override clearing.
 - [x] Make semantic row invalidation and bounded span transfers operational; coalesce expired halo/feedback frames.
 - [x] Add Wi-Fi attempt/status/stage/elapsed/reason diagnostics without restarting active attempts.
 - [x] Restore ESP32 GCC 8 compatibility with explicit circular-span construction and type-safe span-width arithmetic.
@@ -19,6 +21,8 @@
 
 ## Hardware validation remaining
 
+- [ ] Measure halo rasterization below 5 ms, total presentation below 30 ms, and stable 24 FPS without accumulating coalesced deadlines.
+- [ ] Compare two-span halo presentation against a center-preserving single-span strategy on hardware before changing the safe default.
 - [ ] Run the physical compositor acceptance checklist in `README.md` using compatibility mode.
 - [ ] Record startup heap before/after indexed allocation plus PlatformIO RAM/flash totals.
 - [ ] Confirm contact presentation is under 20 ms and tune touch orientation/hit spans if required.

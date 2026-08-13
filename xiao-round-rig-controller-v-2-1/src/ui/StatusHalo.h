@@ -4,6 +4,7 @@
 
 #include "display/DisplayDevice.h"
 #include "model/RigTypes.h"
+#include "ui/HaloGeometry.h"
 
 namespace rig {
 
@@ -30,9 +31,8 @@ class StatusHalo {
 
  private:
   static constexpr size_t kPaletteSize = 256;
-  static constexpr int kSegmentCount = 48;
-  static constexpr int kOuterRadius = 117;
-  static constexpr int kInnerRadius = 110;
+  static constexpr int kOuterRadius = HaloGeometry::kOuterRadius;
+  static constexpr int kInnerRadius = HaloGeometry::kInnerRadius;
 
   void buildPalette(RigState state, uint16_t *destination);
   void render(uint64_t elapsedUs);
@@ -40,13 +40,13 @@ class StatusHalo {
   uint16_t paletteColor(uint8_t index, float transition) const;
   uint16_t blend565(uint16_t from, uint16_t to, uint8_t amount) const;
   uint16_t scale565(uint16_t color, uint8_t brightness) const;
-  void fillWrappedArc(
-      Arduino_GFX &gfx,
-      float start,
-      float end,
-      uint16_t color) const;
+  uint32_t presentHalo();
 
   DisplayDevice &display_;
+  HaloGeometry geometry_{};
+  uint16_t framePixels_[HaloGeometry::kMaxPixels] = {0};
+  uint16_t framePalette_[kPaletteSize] = {0};
+  uint16_t spanBuffer_[HaloGeometry::kOuterRadius] = {0};
   RigState state_ = RigState::Booting;
   uint16_t fromPalette_[kPaletteSize] = {0};
   uint16_t targetPalette_[kPaletteSize] = {0};
@@ -63,6 +63,10 @@ class StatusHalo {
   uint32_t statsFrameStart_ = 0;
   uint32_t renderUs_ = 0;
   uint32_t maxRenderUs_ = 0;
+  uint32_t transferUs_ = 0;
+  uint32_t maxTransferUs_ = 0;
+  uint32_t bytesTransferred_ = 0;
+  uint32_t statsBytesStart_ = 0;
   bool interactive_ = false;
   bool touchActive_ = false;
   bool touchDragging_ = false;

@@ -78,13 +78,17 @@ void StatusHalo::tick(uint32_t nowUs) {
     const uint32_t frames = renderedFrames_ - statsFrameStart_;
     const float seconds = static_cast<float>(elapsedUs_ - lastStatsUs_) / 1000000.0f;
     Serial.printf(
-        "[halo] %.1f presented fps, %lu coalesced, render=%lu/%luus dma=%s\n",
+        "[halo] %.1f fps, %lu coalesced, raster=%lu/%luus transfer=%lu/%luus bytes/s=%lu dma=%s\n",
         frames / seconds,
         static_cast<unsigned long>(droppedFrames_),
-        static_cast<unsigned long>(renderUs_),
+        static_cast<unsigned long>(renderUs_ > transferUs_ ? renderUs_ - transferUs_ : 0),
         static_cast<unsigned long>(maxRenderUs_),
+        static_cast<unsigned long>(transferUs_),
+        static_cast<unsigned long>(maxTransferUs_),
+        static_cast<unsigned long>((bytesTransferred_ - statsBytesStart_) / seconds),
         display_.dmaEnabled() ? "on" : "off");
     statsFrameStart_ = renderedFrames_;
+    statsBytesStart_ = bytesTransferred_;
     lastStatsUs_ = elapsedUs_;
   }
 }
@@ -159,100 +163,62 @@ void StatusHalo::render(uint64_t elapsedUs) {
   const float cycle = static_cast<float>(elapsedUs % kOrbitCycleUs) /
       static_cast<float>(kOrbitCycleUs);
   const float eased = cubicBezier(cycle, 0.65f, 0.0f, 0.35f, 1.0f);
-
-  // A slow baseline guarantees continuous motion. The Bezier lap adds a
-  // deliberate accelerate/coast/relax rhythm without a visible loop seam.
   float phaseDegrees = eased * 360.0f + seconds * 12.0f;
   phaseDegrees += 8.0f * sinf(seconds * 0.71f);
-  phaseDegrees = fmodf(phaseDegrees, 360.0f);
-  if (phaseDegrees < 0.0f) phaseDegrees += 360.0f;
-
+  const uint8_t phase = static_cast<uint8_t>(static_cast<int>(phaseDegrees * 256.0f / 360.0f) & 255);
   const float breath = 0.79f + 0.21f * (0.5f + 0.5f * sinf(seconds * 1.61f));
   const uint8_t brightness = static_cast<uint8_t>(breath * (interactive_ ? 130.0f : 255.0f));
-  const float drift = 11.0f * sinf(seconds * 0.23f);
-
   float transition = 1.0f;
   if (transitioning_) {
-    const uint64_t transitionAge = elapsedUs - transitionStartedUs_;
-    transition = constrain(
-        static_cast<float>(transitionAge) / static_cast<float>(kTransitionUs),
-        0.0f,
-        1.0f);
+    const uint64_t age = elapsedUs - transitionStartedUs_;
+    transition = constrain(static_cast<float>(age) / static_cast<float>(kTransitionUs), 0.0f, 1.0f);
     transition = cubicBezier(transition, 0.25f, 0.1f, 0.25f, 1.0f);
-    if (transitionAge >= kTransitionUs) transitioning_ = false;
+    if (age >= kTransitionUs) transitioning_ = false;
   }
-
-  Arduino_GFX &gfx = display_.gfx();
-  const float segmentDegrees = 360.0f / static_cast<float>(kSegmentCount);
-  gfx.startWrite();
-  for (int segment = 0; segment < kSegmentCount; ++segment) {
-    const float start = segment * segmentDegrees;
-    const float sampleAngle = start + phaseDegrees + drift;
-    int sample = static_cast<int>(sampleAngle * (255.0f / 360.0f));
-    sample %= 256;
-    if (sample < 0) sample += 256;
-
-    uint16_t color = paletteColor(static_cast<uint8_t>(sample), transition);
-    color = scale565(color, brightness);
-    const float end = start + segmentDegrees + 0.7f;
-    if (end <= 360.0f) {
-      gfx.writeFillArcHelper(
-          120, 120, kOuterRadius, kInnerRadius, start, end, color);
-    } else {
-      // Arduino_GFX does not wrap arc endpoints beyond 360 degrees. Split the
-      // overlap at zero so the final segment closes the halo without a seam.
-      gfx.writeFillArcHelper(
-          120, 120, kOuterRadius, kInnerRadius, start, 360.0f, color);
-      gfx.writeFillArcHelper(
-          120, 120, kOuterRadius, kInnerRadius, 0.0f, end - 360.0f, color);
+  for (int index = 0; index < 256; ++index) {
+    framePalette_[index] = scale565(paletteColor(static_cast<uint8_t>(index), transition), brightness);
+  }
+  for (uint16_t index = 0; index < geometry_.count(); ++index) {
+    const HaloPixel &pixel = geometry_.pixel(index);
+    framePixels_[index] = framePalette_[wrapHaloPhase(pixel.angle, phase)];
+  }
+  // Touch and outcome feedback modify the compact annular framebuffer only.
+  if (touchActive_ || outcome_ != 0) {
+    const uint8_t touchAngle = geometry_.angleAt(touchX_, touchY_);
+    const uint8_t touchWidth = touchDragging_ ? 18 : static_cast<uint8_t>(8 + touchProgress_ / 80);
+    const uint8_t outcomeEnd = static_cast<uint8_t>(((elapsedUs - outcomeStartedUs_) * 256ULL) / 600000ULL);
+    for (uint16_t index = 0; index < geometry_.count(); ++index) {
+      const uint8_t angle = geometry_.pixel(index).angle;
+      const uint8_t distance = static_cast<uint8_t>(angle - touchAngle);
+      const uint8_t circularDistance = distance > 128 ? static_cast<uint8_t>(256-distance) : distance;
+      if (touchActive_ && circularDistance <= touchWidth) framePixels_[index] = theme::kWhite;
+      if (touchActive_ && static_cast<uint8_t>(angle-touchAngle-128) < 5) framePixels_[index] = theme::kCyan;
+      if (outcome_ != 0 && angle <= outcomeEnd) framePixels_[index] = outcome_ > 0 ? theme::kGreen : theme::kAmber;
     }
+    if (outcome_ != 0 && elapsedUs - outcomeStartedUs_ >= 600000ULL) outcome_ = 0;
   }
-  if (touchActive_) {
-    float angle = atan2f(
-        static_cast<float>(touchY_) - 120.0f,
-        static_cast<float>(touchX_) - 120.0f) * 180.0f / PI + 90.0f;
-    if (angle < 0.0f) angle += 360.0f;
-    const float width = touchDragging_ ? 24.0f : 12.0f + touchProgress_ * 0.020f;
-    fillWrappedArc(gfx, angle - width, angle + width, theme::kWhite);
-    float echo = fmodf(angle + 180.0f, 360.0f);
-    fillWrappedArc(gfx, echo - 5.0f, echo + 5.0f, theme::kCyan);
-  }
-  if (outcome_ != 0) {
-    const uint64_t age = elapsedUs_ - outcomeStartedUs_;
-    if (age < 600000ULL) {
-      const float sweep = static_cast<float>(age) / 600000.0f * 360.0f;
-      gfx.writeFillArcHelper(
-          120, 120, kOuterRadius, kInnerRadius, 0.0f, sweep,
-          outcome_ > 0 ? theme::kGreen : theme::kAmber);
-    } else {
-      outcome_ = 0;
-    }
-  }
-  gfx.endWrite();
+  const uint32_t transferStarted = micros();
+  bytesTransferred_ += presentHalo();
+  transferUs_ = micros() - transferStarted;
+  if (transferUs_ > maxTransferUs_) maxTransferUs_ = transferUs_;
 }
 
-void StatusHalo::fillWrappedArc(
-    Arduino_GFX &gfx,
-    float start,
-    float end,
-    uint16_t color) const {
-  while (start < 0.0f) {
-    start += 360.0f;
-    end += 360.0f;
+uint32_t StatusHalo::presentHalo() {
+  Arduino_GFX &gfx = display_.gfx();
+  uint32_t bytes = 0;
+  uint16_t pixelIndex = 0;
+  for (int y = 0; y < HaloGeometry::kSize; ++y) {
+    const HaloRow &row = geometry_.row(y);
+    const HaloSpan spans[2] = {row.left, row.right};
+    for (const HaloSpan &span : spans) {
+      if (!span.valid()) continue;
+      const uint16_t width = span.width();
+      for (uint16_t x = 0; x < width; ++x) spanBuffer_[x] = framePixels_[pixelIndex++];
+      gfx.draw16bitRGBBitmap(span.left, y, spanBuffer_, width, 1);
+      bytes += width * 2;
+    }
   }
-  while (start >= 360.0f) {
-    start -= 360.0f;
-    end -= 360.0f;
-  }
-  if (end <= 360.0f) {
-    gfx.writeFillArcHelper(
-        120, 120, kOuterRadius, kInnerRadius, start, end, color);
-    return;
-  }
-  gfx.writeFillArcHelper(
-      120, 120, kOuterRadius, kInnerRadius, start, 360.0f, color);
-  gfx.writeFillArcHelper(
-      120, 120, kOuterRadius, kInnerRadius, 0.0f, end - 360.0f, color);
+  return bytes;
 }
 
 float StatusHalo::cubicBezier(

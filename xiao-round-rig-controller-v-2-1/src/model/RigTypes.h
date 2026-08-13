@@ -34,8 +34,11 @@ enum class ControlAction : uint8_t {
   StopRecording,
 };
 
+enum class CredentialSource : uint8_t { Defaults, SdCard, NvsOverride, RuntimeEdit };
+inline const char *credentialSourceLabel(CredentialSource source) { switch(source){case CredentialSource::Defaults:return "DEFAULT";case CredentialSource::SdCard:return "SD";case CredentialSource::NvsOverride:return "NVS";case CredentialSource::RuntimeEdit:return "RUNTIME";}return "UNKNOWN";}
+
 struct RigConfig {
-  String wifiSsid; String wifiPassword; String apiBase="http://192.168.0.25:8787"; String nodeId; String bearerToken; uint32_t pollMs=1000;
+  String wifiSsid; String wifiPassword; String apiBase="http://192.168.0.25:8787"; String nodeId; String bearerToken; uint32_t pollMs=1000; CredentialSource credentialSource=CredentialSource::Defaults; uint32_t configGeneration=0;
   bool wifiConfigured()const{return wifiSsid.length()>0&&wifiPassword!="CHANGE_ME";}
   bool tokenConfigured()const{return bearerToken.length()>0&&bearerToken!="CHANGE_ME_DEVICE_TOKEN";}
 };
@@ -81,6 +84,12 @@ struct RigSnapshot {
   uint32_t haloFrames = 0;
   uint32_t haloDropped = 0;
   uint16_t retrySeconds = 0;
+  uint16_t passwordLength = 0;
+  uint32_t credentialFingerprint = 0;
+  uint32_t configGeneration = 0;
+  uint32_t lastAttemptDurationMs = 0;
+  uint32_t retryRemainingMs = 0;
+  char credentialSource[12] = {0};
   uint32_t chunkCount = 0;
   uint32_t recordingSeconds = 0;
   char detail[48] = {0};

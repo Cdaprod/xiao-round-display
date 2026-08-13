@@ -190,7 +190,7 @@ Discover the current macOS port rather than assuming its suffix:
 pio device list
 pio run -e seeed_xiao_esp32c3_compat --target clean
 pio run -e seeed_xiao_esp32c3_compat --target upload --upload-port <detected-port>
-pio device monitor --port <detected-port> --baud 115200 --filter time --filter esp32_exception_decoder
+pio device monitor --port <detected-port> --baud 115200 --filter time
 ```
 
 Verify: specific boot Wi-Fi stage; stable failure reason and retry countdown; Retry Now; nonblocking scan; tap cycle; swipe selection; tap/hold expansion; inertial scrolling; top swipe collapse; center return; keyboard lifecycle and secret masking; NVS persistence; separate SD/file/parse/field status; recording drag safety; closed animated halo; compatibility stability; and secret-free Serial output.

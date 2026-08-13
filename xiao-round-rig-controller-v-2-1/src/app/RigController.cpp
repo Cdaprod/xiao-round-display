@@ -3,6 +3,7 @@
 #include <WiFi.h>
 
 #include "RigBuildConfig.h"
+#include "config/ConfigPolicy.h"
 
 namespace rig {
 
@@ -43,6 +44,10 @@ bool RigController::begin() {
   copyText(snapshot_.nodeId, config_.nodeId);
   copyText(snapshot_.apiBase, config_.apiBase);
   copyText(snapshot_.wifiSsid, config_.wifiSsid);
+  copyText(snapshot_.credentialSource, credentialSourceLabel(config_.credentialSource));
+  snapshot_.passwordLength = config_.wifiPassword.length();
+  snapshot_.credentialFingerprint = credentialFingerprint(config_.wifiSsid.c_str(), config_.wifiPassword.c_str());
+  snapshot_.configGeneration = config_.configGeneration;
   ui_.begin(snapshot_);
 
   actionQueue_ = xQueueCreate(4, sizeof(ControlAction));
@@ -164,7 +169,7 @@ void RigController::startWifi(uint32_t nowMs) {
   lastWifiRetryAt_ = nowMs;
   snapshot_.state = RigState::WifiConnecting;
   copyText(snapshot_.detail, String("JOINING ") + config_.wifiSsid);
-  Serial.printf("wifi: attempt=%lu status=%d stage=connecting elapsed=0ms ssid=%s\n", static_cast<unsigned long>(wifiAttemptNumber_), static_cast<int>(WiFi.status()), config_.wifiSsid.c_str());
+  Serial.printf("wifi: attempt=%lu status=%d source=%s ssid=%s passlen=%u fingerprint=%08lx generation=%lu\n", static_cast<unsigned long>(wifiAttemptNumber_), static_cast<int>(WiFi.status()), credentialSourceLabel(config_.credentialSource), config_.wifiSsid.c_str(), static_cast<unsigned>(config_.wifiPassword.length()), static_cast<unsigned long>(credentialFingerprint(config_.wifiSsid.c_str(), config_.wifiPassword.c_str())), static_cast<unsigned long>(config_.configGeneration));
 }
 
 void RigController::updateWifi(uint32_t nowMs) {
@@ -179,7 +184,7 @@ void RigController::updateWifi(uint32_t nowMs) {
   if (wifiStatus != lastWifiStatus_ || nowMs - lastWifiDiagnosticAt_ >= 2000) {
     lastWifiStatus_ = wifiStatus;
     lastWifiDiagnosticAt_ = nowMs;
-    Serial.printf("wifi: attempt=%lu status=%d stage=%s elapsed=%lums reason=%d\n", static_cast<unsigned long>(wifiAttemptNumber_), wifiStatus, wifiStageLabel(wifiRetry_.stage()), static_cast<unsigned long>(wifiAttempting_ ? nowMs - wifiAttemptAt_ : 0), wifiRetry_.reason());
+    Serial.printf("wifi: attempt=%lu status=%d stage=%s elapsed=%lums retry=%lus reason=%d\n", static_cast<unsigned long>(wifiAttemptNumber_), wifiStatus, wifiStageLabel(wifiRetry_.stage()), static_cast<unsigned long>(wifiAttempting_ ? nowMs - wifiAttemptAt_ : lastWifiAttemptDurationMs_), static_cast<unsigned long>(wifiRetry_.countdown(nowMs)), wifiRetry_.reason());
   }
   const bool connected = wifiStatus == WL_CONNECTED;
   snapshot_.wifiConnected = connected;
@@ -216,6 +221,7 @@ void RigController::updateWifi(uint32_t nowMs) {
 
   if (wifiAttempting_ &&
       nowMs - wifiAttemptAt_ >= build::kWifiConnectTimeoutMs) {
+    lastWifiAttemptDurationMs_=nowMs-wifiAttemptAt_;
     wifiAttempting_ = false;
     snapshot_.state = RigState::WifiOffline;
     copyText(snapshot_.detail, "CHECK SSID/PASS");
@@ -225,16 +231,18 @@ void RigController::updateWifi(uint32_t nowMs) {
   }
 
   if (wifiAttempting_ && WiFi.status() == WL_NO_SSID_AVAIL) {
-    wifiAttempting_ = false; wifiRetry_.fail(WifiStage::NoAccessPoint, 201, nowMs);
+    lastWifiAttemptDurationMs_=nowMs-wifiAttemptAt_; wifiAttempting_ = false; wifiRetry_.fail(WifiStage::NoAccessPoint, 201, nowMs);
     copyText(snapshot_.wifiReasonText, "AP NOT FOUND"); snapshot_.wifiReason = 201;
   } else if (wifiAttempting_ && WiFi.status() == WL_CONNECT_FAILED) {
-    wifiAttempting_ = false; wifiRetry_.fail(WifiStage::AuthenticationFailure, 202, nowMs);
+    lastWifiAttemptDurationMs_=nowMs-wifiAttemptAt_; wifiAttempting_ = false; wifiRetry_.fail(WifiStage::AuthenticationFailure, 202, nowMs);
     copyText(snapshot_.wifiReasonText, "AUTH FAILED"); snapshot_.wifiReason = 202;
   }
 
   const bool retryDue = wifiRetry_.update(nowMs);
   snapshot_.wifiStage = wifiRetry_.stage();
   snapshot_.retrySeconds = wifiRetry_.countdown(nowMs);
+  snapshot_.retryRemainingMs = snapshot_.retrySeconds * 1000UL;
+  snapshot_.lastAttemptDurationMs = wifiAttempting_ ? nowMs-wifiAttemptAt_ : lastWifiAttemptDurationMs_;
   if (!wifiAttempting_ && config_.wifiConfigured() && retryDue) {
     WiFi.disconnect();
     startWifi(nowMs);
@@ -308,6 +316,7 @@ void RigController::handleUiCommand(const UiCommand &command, uint32_t nowMs) {
       } else copyText(snapshot_.lastError,"INVALID VALUE");
       break;
     case UiAction::ForgetWifi: configStore_.saveOverride(ConfigField::WifiSsid,"",config_);configStore_.saveOverride(ConfigField::WifiPassword,"",config_);WiFi.disconnect();break;
+    case UiAction::ClearWifiOverride: configStore_.clearWifiOverrides(config_); ESP.restart(); break;
     case UiAction::ClearOverrides: configStore_.clearOverrides(); ESP.restart(); break;
     case UiAction::ReloadSd: configStore_.clearOverrides(); ESP.restart(); break;
     case UiAction::Reboot: ESP.restart(); break;

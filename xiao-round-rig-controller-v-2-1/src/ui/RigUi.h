@@ -8,7 +8,7 @@
 #include "ui/UiCompositor.h"
 #include "ui/UiInvalidation.h"
 namespace rig {
-enum class UiAction:uint8_t{None,RetryWifi,ScanWifi,SelectWifi,DisconnectWifi,TestApi,PollApi,StartRecording,StopRecording,ClearError,SaveConfig,ForgetWifi,ClearOverrides,Reboot,ReloadSd,DisplayTest,TouchTest};
+enum class UiAction:uint8_t{None,RetryWifi,ScanWifi,SelectWifi,DisconnectWifi,TestApi,PollApi,StartRecording,StopRecording,ClearError,SaveConfig,ForgetWifi,ClearWifiOverride,ClearOverrides,Reboot,ReloadSd,DisplayTest,TouchTest};
 struct UiCommand{UiAction action=UiAction::None;ConfigField field=ConfigField::WifiSsid;char value[96]={0};};
 class RigUi {
  public:
