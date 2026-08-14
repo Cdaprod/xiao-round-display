@@ -5,6 +5,7 @@
 #include "display/DisplayDevice.h"
 #include "model/RigTypes.h"
 #include "ui/HaloGeometry.h"
+#include "ui/HaloPresentationModel.h"
 
 namespace rig {
 
@@ -14,8 +15,9 @@ class StatusHalo {
 
   void begin(RigState state);
   void setState(RigState state);
+  void setCategory(UiPage category, uint64_t nowUs);
+  void setViewMode(UiMode mode, uint64_t nowUs);
   void tick(uint32_t nowUs);
-  void setInteractive(bool value) { interactive_ = value; }
   void setTouchFeedback(
       bool active,
       uint16_t x,
@@ -26,6 +28,10 @@ class StatusHalo {
 
   uint32_t renderedFrames() const { return renderedFrames_; }
   uint32_t droppedFrames() const { return droppedFrames_; }
+  uint32_t skippedIdleFrames() const { return skippedIdleFrames_; }
+  uint32_t scheduledFrames() const { return presentation_.scheduledFrames(); }
+  HaloPresentation presentationState() const { return presentation_.presentation(); }
+  HaloCategory category() const { return presentation_.category(); }
   uint32_t renderUs() const { return renderUs_; }
   uint32_t maxRenderUs() const { return maxRenderUs_; }
 
@@ -34,7 +40,7 @@ class StatusHalo {
   static constexpr int kOuterRadius = HaloGeometry::kOuterRadius;
   static constexpr int kInnerRadius = HaloGeometry::kInnerRadius;
 
-  void buildPalette(RigState state, uint16_t *destination);
+  void buildPalette(HaloCategory category, uint16_t *destination);
   void render(uint64_t elapsedUs);
   float cubicBezier(float x, float x1, float y1, float x2, float y2) const;
   uint16_t paletteColor(uint8_t index, float transition) const;
@@ -50,8 +56,7 @@ class StatusHalo {
   RigState state_ = RigState::Booting;
   uint16_t fromPalette_[kPaletteSize] = {0};
   uint16_t targetPalette_[kPaletteSize] = {0};
-  bool transitioning_ = false;
-  uint64_t transitionStartedUs_ = 0;
+  HaloPresentationModel presentation_{};
 
   bool clockStarted_ = false;
   uint32_t lastTickUs_ = 0;
@@ -59,6 +64,7 @@ class StatusHalo {
   uint32_t frameAccumulatorUs_ = 0;
   uint32_t renderedFrames_ = 0;
   uint32_t droppedFrames_ = 0;
+  uint32_t skippedIdleFrames_ = 0;
   uint64_t lastStatsUs_ = 0;
   uint32_t statsFrameStart_ = 0;
   uint32_t renderUs_ = 0;
@@ -67,8 +73,8 @@ class StatusHalo {
   uint32_t maxTransferUs_ = 0;
   uint32_t bytesTransferred_ = 0;
   uint32_t statsBytesStart_ = 0;
-  bool interactive_ = false;
   bool touchActive_ = false;
+  bool touchSuppressed_ = false;
   bool touchDragging_ = false;
   uint16_t touchX_ = 120;
   uint16_t touchY_ = 120;

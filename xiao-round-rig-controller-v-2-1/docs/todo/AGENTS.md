@@ -1,3 +1,10 @@
+- [x] Make halo palettes category-owned with localized operational overlays.
+- [x] Add Entering/Ambient/Touching/Holding/Success/Failure/Exiting/Hidden lifecycle.
+- [x] Stop halo scheduling and transfers while menus and keyboards own the view.
+- [x] Preserve phase across category crossfades and stop counting intentional idle as dropped.
+- [ ] Migrate UI composition/input to pinned LVGL 8.3 after compatibility build dependencies are available.
+- [ ] Convert the halo into an LVGL-owned custom object before enabling LVGL display flush ownership.
+
 - [x] Assign a sanitized DHCP hostname before Wi-Fi association.
 - [x] Start an independent port-80 HTTP and mDNS service after DHCP succeeds.
 - [x] Separate LAN readiness from Media Sync API readiness.

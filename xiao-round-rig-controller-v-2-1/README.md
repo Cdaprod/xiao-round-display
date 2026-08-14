@@ -237,3 +237,7 @@ Host policy test:
 ```sh
 g++ -std=c++17 -Wall -Wextra -Werror tests/test_network_service.cpp -o /tmp/rig-network-tests && /tmp/rig-network-tests
 ```
+
+### Event-driven category halo
+
+The summary halo now uses category palettes, preserves angular phase across category changes, fades out before expanded views, and schedules no frames while menus or keyboards are visible. Operational state is rendered as localized joining/error/recording overlays rather than replacing the full category palette. See `docs/architecture/HALO_PRESENTATION.md`.

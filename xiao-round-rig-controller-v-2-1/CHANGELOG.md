@@ -1,3 +1,4 @@
+- Refactored the halo into category-owned event-driven palettes that enter, exit, and stop while expanded UI is visible.
 - Added independent DHCP hostname, mDNS discovery, and a redacted authenticated local HTTP status service.
 - Separated menu highlight, scroll, and hold activation; added circular-safe modal recovery and transactional keyboard editing.
 # Changelog
