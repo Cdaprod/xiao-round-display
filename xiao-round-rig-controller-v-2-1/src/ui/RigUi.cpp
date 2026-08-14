@@ -24,7 +24,7 @@ bool RigUi::expanded()const{return mode_!=UiMode::Summary&&mode_!=UiMode::TabHol
 void RigUi::tick(uint32_t now){if(!lastTickUs_)lastTickUs_=now;uint32_t delta=now-lastTickUs_;lastTickUs_=now;if(mode_==UiMode::Scrolling||scroll_.moving()){scroll_.tick(delta/1000000.0f);selection_.setHighlighted(scroll_.rowAt(120,58,30,rowCount()));invalidation_.add(ScrollDirty);}if(mode_==UiMode::Expanding||mode_==UiMode::Collapsing){uint32_t duration=mode_==UiMode::Expanding?260000:200000;transitionProgress_=static_cast<uint16_t>(min(1000UL,elapsed(now,animationAtUs_)*1000UL/duration));invalidation_.add(PanelViewportDirty);if(transitionProgress_>=1000){mode_=mode_==UiMode::Expanding?UiMode::Expanded:UiMode::Summary;invalidation_.add(BackgroundDirty|HeaderDirty|(mode_==UiMode::Summary?SummaryBodyDirty:PanelViewportDirty));}}
  if(mode_==UiMode::Keyboard&&contact_&&keyboardPressedKey_==24&&!dragged_){uint32_t held=elapsed(now/1000,pressAtMs_);if(held>=500&&elapsed(now/1000,lastBackspaceRepeatMs_)>=110){appendKey(24);lastBackspaceRepeatMs_=now/1000;keyboardRepeatStarted_=true;}}
  if(contact_&&touchY_>=24&&touchY_<=52&&elapsed(now/1000,pressAtMs_)>=3000&&mode_!=UiMode::Summary){strncpy(edit_,originalEdit_,sizeof(edit_)-1);edit_[sizeof(edit_)-1]=0;contact_=false;stableLayer_=StableLayer::Category;mode_=UiMode::Summary;selection_.cancel();invalidation_.add(BackgroundDirty|HeaderDirty|SummaryBodyDirty|OverlayDirty);}
- if(contact_){uint32_t held=elapsed(now/1000,pressAtMs_);uint16_t progress=selection_.holding()?selection_.holdProgress(now/1000):static_cast<uint16_t>(min(1000UL,held*1000UL/450UL));halo_.setTouchFeedback(true,touchX_,touchY_,progress,dragged_);if(stableLayer_==StableLayer::Menu&&mode_==UiMode::Expanded&&!rowHoldConsumed_){int activated=selection_.update(now/1000,actionAt(touchX_,touchY_)==selection_.pressed(),true);if(activated>=0){rowHoldConsumed_=true;contact_=false;touchPhase_=TouchPhase::WaitForRelease;gestures_.cancel();inputBarrier_.open(++inputGeneration_);TouchEvent event{};event.sequenceId=touchSequence_;event.x=touchX_;event.y=touchY_;logTouchTransition(event,"ROW_EXECUTE");executeRow(activated);}}if(elapsed(now,lastFeedbackUs_)>=41666){lastFeedbackUs_=now;invalidation_.add(FeedbackDirty,touchY_>18?touchY_-18:0,touchY_<221?touchY_+18:239);}else counters_.skippedFrames++;}else halo_.setTouchFeedback(false,0,0,0,false);
+ if(contact_){uint32_t held=elapsed(now/1000,pressAtMs_);uint16_t progress=selection_.holding()?selection_.holdProgress(now/1000):static_cast<uint16_t>(min(1000UL,held*1000UL/1200UL));if(stableLayer_==StableLayer::Category)halo_.setTouchFeedback(true,touchX_,touchY_,progress,dragged_);else halo_.setTouchFeedback(false,0,0,0,false);if(stableLayer_==StableLayer::Menu&&mode_==UiMode::Expanded&&!rowHoldConsumed_){int activated=selection_.update(now/1000,actionAt(touchX_,touchY_)==selection_.pressed(),true);if(activated>=0){rowHoldConsumed_=true;contact_=false;touchPhase_=TouchPhase::WaitForRelease;gestures_.cancel();inputBarrier_.open(++inputGeneration_);TouchEvent event{};event.sequenceId=touchSequence_;event.x=touchX_;event.y=touchY_;logTouchTransition(event,"ROW_EXECUTE");executeRow(activated);}}if(elapsed(now,lastFeedbackUs_)>=41666){lastFeedbackUs_=now;invalidation_.add(FeedbackDirty,touchY_>18?touchY_-18:0,touchY_<221?touchY_+18:239);}else counters_.skippedFrames++;}else halo_.setTouchFeedback(false,0,0,0,false);
  DirtyRows dirtyRows;uint16_t dirty=invalidation_.take(dirtyRows);if(dirty)compose(dirty,dirtyRows);halo_.tick(now);counters_.minFreeHeap=min(counters_.minFreeHeap,ESP.getFreeHeap());if(elapsed(now,lastDiagnosticUs_)>=5000000){lastDiagnosticUs_=now;const uint32_t bytesPerSecond=(counters_.bytesTransferred-lastDiagnosticBytes_)/5;lastDiagnosticBytes_=counters_.bytesTransferred;Serial.printf("ui: full=%lu viewport=%lu rows=%lu feedback=%lu bytes/s=%lu compose=%lu/%luus transfer=%lu/%luus skipped=%lu touchmax=%lums heap=%lu/%lu\n",(unsigned long)counters_.fullRedraws,(unsigned long)counters_.viewportRedraws,(unsigned long)counters_.rowRedraws,(unsigned long)counters_.feedbackRedraws,(unsigned long)bytesPerSecond,(unsigned long)(counters_.transfers?counters_.composeTotalUs/counters_.transfers:0),(unsigned long)counters_.composeMaxUs,(unsigned long)(counters_.transfers?counters_.transferTotalUs/counters_.transfers:0),(unsigned long)counters_.transferMaxUs,(unsigned long)counters_.skippedFrames,(unsigned long)counters_.maxTouchIntervalMs,(unsigned long)ESP.getFreeHeap(),(unsigned long)counters_.minFreeHeap);}}
 void RigUi::handleTouch(const TouchEvent &e) {
   if (e.kind == TouchKind::None) return;
@@ -60,9 +60,8 @@ void RigUi::handleTouch(const TouchEvent &e) {
       contact_ = true;
       return;
     }
-    if (e.kind == TouchKind::DragStarted || e.kind == TouchKind::DragMoved) {
-      dragged_ = true;
-      keyboardPressedKey_ = -1;
+    if (e.kind == TouchKind::Moved || e.kind == TouchKind::DragStarted || e.kind == TouchKind::DragMoved) {
+      if(e.totalX>8||e.totalX<-8||e.totalY>8||e.totalY<-8){dragged_=true;keyboardPressedKey_=-1;}
       return;
     }
     if (released) {
@@ -112,8 +111,9 @@ void RigUi::handleTouch(const TouchEvent &e) {
     const int row = stableLayer_ == StableLayer::Menu ? actionAt(e.x, e.y) : -1;
     if (stableLayer_ == StableLayer::Category)
       touchOwner_ = categoryOpenControl(e.x, e.y) ? TouchOwner::CategoryOpenControl : TouchOwner::CategoryPager;
-    else
-      touchOwner_ = row >= 0 ? TouchOwner::MenuRow : TouchOwner::MenuScroller;
+    else if(e.y>=24&&e.y<=52)
+      touchOwner_=TouchOwner::MenuHeader;
+    else touchOwner_ = row >= 0 ? TouchOwner::MenuRow : TouchOwner::MenuScroller;
     selection_.begin(row, e.timestampMs,
                      selection_.settled(e.timestampMs) && !scroll_.moving());
     pressedRow_ = selection_.holding() ? row : -1;
@@ -127,15 +127,11 @@ void RigUi::handleTouch(const TouchEvent &e) {
     return;
   }
 
-  if (e.kind == TouchKind::HoldStarted && stableLayer_ == StableLayer::Category &&
-      touchOwner_ == TouchOwner::CategoryOpenControl && gestures_.active()) {
-    touchPhase_ = TouchPhase::HoldFired; gestures_.cancel(); contact_ = false;
-    requestOpenMenu(e.sequenceId); logTouchTransition(e, "HOLD_OPEN"); return;
-  }
   if (e.kind == TouchKind::HoldStarted && stableLayer_ == StableLayer::Menu &&
       gestures_.active() && gestures_.session().startedInMenuHeader) {
     touchPhase_ = TouchPhase::HoldFired; gestures_.cancel(); selection_.cancel();
-    contact_ = false; requestCloseMenu(e.sequenceId); logTouchTransition(e,"HOLD_BACK"); return;
+    contact_ = false; inputBarrier_.open(++inputGeneration_);showStatus();
+    logTouchTransition(e,"HOLD_STATUS"); return;
   }
   if (e.kind == TouchKind::Cancelled) {
     touchPhase_ = TouchPhase::Cancelled;
@@ -146,13 +142,13 @@ void RigUi::handleTouch(const TouchEvent &e) {
     invalidation_.add(FeedbackDirty); return;
   }
 
-  if (e.kind == TouchKind::DragStarted || e.kind == TouchKind::DragMoved) {
+  if (e.kind == TouchKind::Moved || e.kind == TouchKind::DragStarted || e.kind == TouchKind::DragMoved) {
     selection_.moved(e.totalX, e.totalY);
     const GestureOwner owner = gestures_.move(e.x, e.y, e.velocityX,
                                                e.velocityY, e.timestampMs);
     dragged_ = owner != GestureOwner::None;
     if(owner==GestureOwner::CategoryHorizontal)touchPhase_=TouchPhase::DraggingHorizontal;
-    else if(owner==GestureOwner::CategoryMenuOpen||owner==GestureOwner::MenuScroll||owner==GestureOwner::MenuClose)touchPhase_=TouchPhase::DraggingVertical;
+    else if(owner==GestureOwner::MenuScroll)touchPhase_=TouchPhase::DraggingVertical;
     if (!selection_.holding()) pressedRow_ = -1;
     if (owner == GestureOwner::MenuScroll) {
       if (!scrollDragStarted_) { scroll_.beginDrag(); scrollDragStarted_ = true; mode_ = UiMode::Scrolling; }
@@ -166,7 +162,7 @@ void RigUi::handleTouch(const TouchEvent &e) {
 
   const bool headerTap = stableLayer_ == StableLayer::Menu &&
       gestures_.session().startedInMenuHeader &&
-      e.totalX >= -8 && e.totalX <= 8 && e.totalY >= -8 && e.totalY <= 8;
+      e.totalX >= -14 && e.totalX <= 14 && e.totalY >= -14 && e.totalY <= 14;
   const int releaseRow = stableLayer_ == StableLayer::Menu ? actionAt(e.x,e.y) : -1;
   const GestureResolution resolution = gestures_.release(e.x,e.y,e.velocityX,e.velocityY,releaseRow);
   contact_ = false; pressedRow_ = -1;
@@ -177,7 +173,9 @@ void RigUi::handleTouch(const TouchEvent &e) {
   switch (resolution) {
     case GestureResolution::CategoryPrevious: changePage(-1); break;
     case GestureResolution::CategoryNext: changePage(1); break;
-    case GestureResolution::OpenMenu: requestOpenMenu(e.sequenceId); inputBarrier_.released(e.timestampMs); break;
+    case GestureResolution::OpenMenu:
+      if(e.kind==TouchKind::Tap){requestOpenMenu(e.sequenceId);inputBarrier_.released(e.timestampMs);}
+      break;
     case GestureResolution::KeepMenu:
       stableLayer_ = StableLayer::Menu;
       if (scrollDragStarted_) scroll_.stopAndSnap(30);
@@ -186,7 +184,6 @@ void RigUi::handleTouch(const TouchEvent &e) {
       mode_ = UiMode::Expanded;
       invalidation_.add(PanelViewportDirty);
       break;
-    case GestureResolution::CloseMenu: selection_.cancel(); requestCloseMenu(e.sequenceId); inputBarrier_.released(e.timestampMs); break;
     case GestureResolution::ActivateAction:
     case GestureResolution::None:
     case GestureResolution::Cancelled:
@@ -231,7 +228,7 @@ void RigUi::closeModal(bool committed){if(!committed){strncpy(edit_,originalEdit
 void RigUi::executeRow(int r){if(page_==UiPage::Status){if(r==0)queue(UiAction::RetryWifi);else if(r==1)queue(UiAction::PollApi);else if(r==2)queue(UiAction::ClearError);else if(r==3)requestCloseMenu(touchSequence_);}else if(page_==UiPage::Network){if(r==0)queue(UiAction::RetryWifi);else if(r==1)queue(UiAction::ScanWifi);else if(r==2)queue(UiAction::SelectWifi);else if(r==3)openEditor(ConfigField::WifiSsid,snapshot_.wifiSsid,false);else if(r==4)openEditor(ConfigField::WifiPassword,"",true);else if(r==5)openEditor(ConfigField::ApiBase,snapshot_.apiBase,false);else if(r==6)queue(UiAction::TestApi);else if(r==7)queue(UiAction::DisconnectWifi);else if(r==8||r==9){confirmRow_=r;modalReturnMode_=UiMode::Expanded;mode_=UiMode::Confirm;inputBarrier_.open(++inputGeneration_);invalidation_.add(OverlayDirty);}}else if(page_==UiPage::Device){if(r==0)openEditor(ConfigField::NodeId,snapshot_.nodeId,false);else if(r==1)openEditor(ConfigField::BearerToken,"",true);else if(r==2)openEditor(ConfigField::ApiBase,snapshot_.apiBase,false);else if(r==3)queue(UiAction::ReloadSd);else if(r==4||r==7){confirmRow_=r;modalReturnMode_=UiMode::Expanded;mode_=UiMode::Confirm;inputBarrier_.open(++inputGeneration_);invalidation_.add(OverlayDirty);}else if(r==5)queue(UiAction::DisplayTest);else if(r==6)queue(UiAction::TouchTest);}else{bool startOk=r==1&&snapshot_.sessionPresent&&snapshot_.tokenConfigured&&snapshot_.state!=RigState::Recording&&!snapshot_.requestInProgress;bool stopOk=r==2&&snapshot_.sessionPresent&&snapshot_.tokenConfigured&&snapshot_.state==RigState::Recording&&!snapshot_.requestInProgress;if(r==0)queue(UiAction::PollApi);else if(startOk)queue(UiAction::StartRecording);else if(stopOk)queue(UiAction::StopRecording);else if(r==3)queue(UiAction::ClearError);else if(r==4)showStatus();else{halo_.setOutcomeFeedback(false);invalidation_.add(FeedbackDirty);}}}
 bool RigUi::requestOpenMenu(uint32_t sequence){if(stableLayer_==StableLayer::Menu||mode_==UiMode::Expanding||mode_==UiMode::Expanded||mode_==UiMode::Scrolling)return false;inputBarrier_.open(++inputGeneration_);touchSequence_=sequence;touchPhase_=TouchPhase::WaitForRelease;stableLayer_=StableLayer::Menu;mode_=UiMode::Expanding;halo_.setViewMode(mode_,micros());animationAtUs_=micros();transitionProgress_=0;int count=rowCount();scroll_.configure(166,count*30);selection_.setHighlighted(scroll_.rowAt(120,58,30,count));invalidation_.add(BackgroundDirty|PanelViewportDirty);return true;}
 bool RigUi::requestCloseMenu(uint32_t sequence){if(stableLayer_==StableLayer::Category||mode_==UiMode::Collapsing||mode_==UiMode::Summary)return false;inputBarrier_.open(++inputGeneration_);touchSequence_=sequence;touchPhase_=TouchPhase::WaitForRelease;stableLayer_=StableLayer::Category;mode_=UiMode::Collapsing;halo_.setViewMode(mode_,micros());animationAtUs_=micros();transitionProgress_=0;invalidation_.add(BackgroundDirty|PanelViewportDirty);return true;}
-bool RigUi::categoryOpenControl(uint16_t x,uint16_t y)const{const int dx=int(x)-120,dy=int(y)-120;return dx*dx+dy*dy<=52*52;}
+bool RigUi::categoryOpenControl(uint16_t x,uint16_t y)const{return GestureArbitrator::categoryOpenControl(x,y);}
 void RigUi::logTouchTransition(const TouchEvent&e,const char*event)const{const bool up=e.kind==TouchKind::Released||e.kind==TouchKind::Tap||e.kind==TouchKind::SwipeLeft||e.kind==TouchKind::SwipeRight||e.kind==TouchKind::SwipeUp||e.kind==TouchKind::SwipeDown;const unsigned raw=e.kind==TouchKind::Cancelled?2U:(up?0U:1U);Serial.printf("touch seq=%lu raw=%u stable=%u phase=%u owner=%u x=%u y=%u dx=%d dy=%d row=%d ui=%u event=%s\n",(unsigned long)e.sequenceId,raw,up?0U:1U,(unsigned)touchPhase_,(unsigned)touchOwner_,e.x,e.y,e.totalX,e.totalY,pressedRow_,(unsigned)mode_,event);}
 void RigUi::changePage(int direction){int p=(static_cast<int>(page_)+direction+4)%4;page_=static_cast<UiPage>(p);halo_.setCategory(page_,micros());animationAtUs_=micros();invalidation_.add(BackgroundDirty|HeaderDirty|SummaryBodyDirty);}
 void RigUi::cyclePage(){changePage(1);}void RigUi::showStatus(){stableLayer_=StableLayer::Category;page_=UiPage::Status;halo_.setCategory(page_,micros());halo_.setViewMode(UiMode::Summary,micros());mode_=UiMode::Summary;contact_=false;scroll_.configure(1,1);invalidation_.add(BackgroundDirty|HeaderDirty|SummaryBodyDirty|OverlayDirty);}void RigUi::queue(UiAction a){command_={};command_.action=a;commandReady_=true;}bool RigUi::takeCommand(UiCommand&c){if(!commandReady_)return false;c=command_;commandReady_=false;return true;}

@@ -8,9 +8,7 @@ enum class StableLayer : uint8_t { Category, Menu };
 enum class GestureOwner : uint8_t {
   None,
   CategoryHorizontal,
-  CategoryMenuOpen,
   MenuScroll,
-  MenuClose,
   ActionTap,
   RowHoldCandidate,
   RowHoldArmed,
@@ -22,7 +20,6 @@ enum class GestureResolution : uint8_t {
   CategoryNext,
   OpenMenu,
   KeepMenu,
-  CloseMenu,
   ActivateAction,
   Cancelled
 };
@@ -43,6 +40,13 @@ struct TouchSession {
 class GestureArbitrator {
  public:
   static constexpr int kTouchSlop = 12;
+  static constexpr int kCenterOpenRadius = 72;
+  static constexpr int kTapTolerance = 14;
+
+  static bool categoryOpenControl(int16_t x, int16_t y) {
+    const int dx = x - 120, dy = y - 120;
+    return dx * dx + dy * dy <= kCenterOpenRadius * kCenterOpenRadius;
+  }
 
   void begin(StableLayer layer, uint8_t category, int16_t x, int16_t y,
              uint32_t now, float scrollOffset, bool inHeader, int action) {
@@ -69,20 +73,15 @@ class GestureArbitrator {
     session_.velocityY = vy;
     session_.lastValidSampleAt = now;
     const int ax = absolute(session_.totalDx), ay = absolute(session_.totalDy);
-    if (ax > 9 || ay > 9) session_.actionCandidate = -1;
+    if (ax > 8 || ay > 8) session_.actionCandidate = -1;
     if (session_.gestureOwner != GestureOwner::None) return session_.gestureOwner;
     if (ax <= kTouchSlop && ay <= kTouchSlop) return GestureOwner::None;
-    const bool horizontal = ax >= 16 && ax * 100 >= ay * 145;
-    const bool vertical = ay >= 16 && ay * 100 >= ax * 145;
+    const bool horizontal = ax >= 18 && ax * 100 >= ay * 115;
+    const bool vertical = ay >= 12 && ay * 100 >= ax * 115;
     if (session_.layerAtDown == StableLayer::Category) {
       if (horizontal) session_.gestureOwner = GestureOwner::CategoryHorizontal;
-    } else if (vertical) {
-      if (session_.totalDy > 0 &&
-          (session_.startedInMenuHeader ||
-           (session_.menuScrollOffsetAtDown <= 0.0f && session_.totalDy > 20)))
-        session_.gestureOwner = GestureOwner::MenuClose;
-      else
-        session_.gestureOwner = GestureOwner::MenuScroll;
+    } else if (vertical && !session_.startedInMenuHeader) {
+      session_.gestureOwner = GestureOwner::MenuScroll;
     }
     return session_.gestureOwner;
   }
@@ -97,34 +96,21 @@ class GestureArbitrator {
     switch (session_.gestureOwner) {
       case GestureOwner::CategoryHorizontal: {
         const int distance = absolute(session_.totalDx);
-        const bool commit = distance >= 48 ||
-            (distance >= 24 && absolute(session_.velocityX) >= 420);
+        const bool commit = distance >= 30 ||
+            (distance >= 20 && absolute(session_.velocityX) >= 300);
         session_.committed = commit;
         if (!commit) return GestureResolution::None;
         return session_.totalDx < 0 ? GestureResolution::CategoryNext
                                     : GestureResolution::CategoryPrevious;
       }
-      case GestureOwner::CategoryMenuOpen: {
-        const float progress = openProgress();
-        session_.committed = progress >= 0.42f ||
-            (session_.totalDy <= -26 && session_.velocityY <= -380);
-        return session_.committed ? GestureResolution::OpenMenu
-                                  : GestureResolution::None;
-      }
       case GestureOwner::MenuScroll:
         return GestureResolution::KeepMenu;
-      case GestureOwner::MenuClose: {
-        const float progress = closeProgress();
-        session_.committed = progress >= 0.55f ||
-            (session_.totalDy >= 32 && session_.velocityY >= 420);
-        return session_.committed ? GestureResolution::CloseMenu
-                                  : GestureResolution::KeepMenu;
-      }
       case GestureOwner::ActionTap:
       case GestureOwner::None:
         if (session_.layerAtDown == StableLayer::Category &&
             session_.startedInMenuHeader &&
-            absolute(session_.totalDx) <= 9 && absolute(session_.totalDy) <= 9) {
+            absolute(session_.totalDx) <= kTapTolerance &&
+            absolute(session_.totalDy) <= kTapTolerance) {
           session_.committed = true;
           return GestureResolution::OpenMenu;
         }
@@ -147,22 +133,11 @@ class GestureArbitrator {
     return GestureResolution::Cancelled;
   }
 
-  float openProgress() const {
-    return clamp((-session_.totalDy - 16) / 64.0f);
-  }
-  float closeProgress() const {
-    const float displacement = session_.startedInMenuHeader
-        ? session_.totalDy - 12.0f : session_.totalDy - 20.0f;
-    return clamp(displacement / 64.0f);
-  }
   bool active() const { return active_; }
   const TouchSession &session() const { return session_; }
 
  private:
   static int absolute(int value) { return value < 0 ? -value : value; }
-  static float clamp(float value) {
-    return value < 0.0f ? 0.0f : value > 1.0f ? 1.0f : value;
-  }
   TouchSession session_{};
   bool active_ = false;
 };

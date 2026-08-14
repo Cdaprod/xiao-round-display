@@ -12,6 +12,7 @@ enum class TouchOwner : uint8_t {
   CategoryOpenControl,
   MenuScroller,
   MenuRow,
+  MenuHeader,
   Keyboard,
   Confirmation
 };
@@ -25,28 +26,40 @@ enum class TouchPhase : uint8_t {
   WaitForRelease
 };
 
-// Debounces the physical contact without treating an unreadable I2C sample as
-// a release. A sequence begins only after two pressed samples and ends only
-// after three released samples.
+// Debounces by elapsed time so behavior is independent of polling frequency.
 class StableTouchFilter {
  public:
-  StableTouchTransition update(RawTouchState raw) {
-    if (raw == RawTouchState::Unknown) return StableTouchTransition::None;
+  static constexpr uint32_t kPressDebounceMs = 20;
+  static constexpr uint32_t kReleaseDebounceMs = 70;
+  static constexpr uint32_t kUnknownGraceMs = 40;
+
+  StableTouchTransition update(RawTouchState raw, uint32_t nowMs) {
+    if (raw == RawTouchState::Unknown) {
+      if (!unknownActive_) { unknownActive_ = true; unknownAtMs_ = nowMs; }
+      if (pressed_ && elapsed(nowMs, unknownAtMs_) >= kUnknownGraceMs)
+        raw = RawTouchState::Released;
+      else
+        return StableTouchTransition::None;
+    } else {
+      unknownActive_ = false;
+    }
     if (raw == RawTouchState::Pressed) {
-      releasedSamples_ = 0;
-      if (pressedSamples_ < 2) ++pressedSamples_;
-      if (!pressed_ && pressedSamples_ == 2) {
+      releaseCandidate_ = false;
+      if (!pressCandidate_) { pressCandidate_ = true; pressAtMs_ = nowMs; }
+      if (!pressed_ && elapsed(nowMs, pressAtMs_) >= kPressDebounceMs) {
         pressed_ = true;
+        pressCandidate_ = false;
         ++sequence_;
         holdFired_ = false;
         return StableTouchTransition::Down;
       }
       return StableTouchTransition::None;
     }
-    pressedSamples_ = 0;
-    if (releasedSamples_ < 3) ++releasedSamples_;
-    if (pressed_ && releasedSamples_ == 3) {
+    pressCandidate_ = false;
+    if (!releaseCandidate_) { releaseCandidate_ = true; releaseAtMs_ = nowMs; }
+    if (pressed_ && elapsed(nowMs, releaseAtMs_) >= kReleaseDebounceMs) {
       pressed_ = false;
+      releaseCandidate_ = false;
       holdFired_ = false;
       return StableTouchTransition::Up;
     }
@@ -62,11 +75,16 @@ class StableTouchFilter {
   }
 
  private:
+  static uint32_t elapsed(uint32_t now, uint32_t then) { return now - then; }
   uint32_t sequence_ = 0;
-  uint8_t pressedSamples_ = 0;
-  uint8_t releasedSamples_ = 0;
+  uint32_t pressAtMs_ = 0;
+  uint32_t releaseAtMs_ = 0;
+  uint32_t unknownAtMs_ = 0;
   bool pressed_ = false;
   bool holdFired_ = false;
+  bool pressCandidate_ = false;
+  bool releaseCandidate_ = false;
+  bool unknownActive_ = false;
 };
 
 }  // namespace rig

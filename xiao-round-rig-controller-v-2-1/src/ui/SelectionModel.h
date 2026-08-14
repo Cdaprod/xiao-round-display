@@ -15,15 +15,16 @@ class SelectionModel {
   int activated() const { return activatedRow_; }
 
   void begin(int row, uint32_t nowMs, bool settled) {
+    if (settled && row >= 0) highlightedRow_ = row;
     pressedRow_ = row;
     activatedRow_ = -1;
     holdStartedAtMs_ = nowMs;
-    holdCandidate_ = settled && row >= 0 && row == highlightedRow_;
+    holdCandidate_ = settled && row >= 0;
     consumed_ = false;
   }
 
   void moved(int totalDx, int totalDy) {
-    if (absolute(totalDx) > 7 || absolute(totalDy) > 7) cancelHold();
+    if (absolute(totalDx) > 8 || absolute(totalDy) > 8) cancelHold();
   }
 
   int update(uint32_t nowMs, bool sameRow, bool actionStillValid) {

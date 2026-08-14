@@ -13,6 +13,11 @@ int main() {
 
   SelectionModel selection;
   selection.setHighlighted(3);
+  selection.begin(2, 0, true);
+  assert(selection.highlighted() == 2);
+  assert(selection.update(599, true, true) == -1);
+  assert(selection.update(600, true, true) == 2);
+  assert(selection.update(700, true, true) == -1);
   selection.begin(3, 100, true);
   selection.release(3, 200, false);
   assert(selection.activated() == -1);
@@ -22,7 +27,7 @@ int main() {
   assert(selection.update(1100, true, true) == -1);
 
   selection.begin(3, 1200, true);
-  selection.moved(8, 0);
+  selection.moved(9, 0);
   assert(selection.update(2000, true, true) == -1);
   selection.release(4, 2000, true);
   selection.begin(4, 2100, selection.settled(2100));

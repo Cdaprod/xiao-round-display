@@ -33,4 +33,8 @@
 - [x] Make holds one-shot and prevent live touches crossing menu transitions.
 - [x] Restrict category opening to the center control and row execution to a fresh 600 ms hold.
 - [ ] Physically verify top-edge holds, menu persistence, and single row execution.
+- [x] Simplify summary input to horizontal navigation and a 72 px center tap.
+- [x] Make menu rows focus-and-hold directly and remove drag-to-close competition.
+- [x] Replace sample-count debounce with 20/70 ms elapsed-time stabilization.
+- [ ] Physically tune horizontal cycling, center opening, and header recovery.
 

@@ -6,11 +6,12 @@ TouchEvent TouchController::poll(uint32_t now){
  const bool interruptActive=digitalRead(build::kPinTouchInterrupt)==LOW;
  RawTouchState raw=RawTouchState::Released;
  bool validPoint=false;
- if(interruptActive){uint16_t x,y;if(readPoint(x,y)){healthy_=true;validPoint=true;filter(x,y,lastX_,lastY_);raw=RawTouchState::Pressed;}else{healthy_=false;raw=RawTouchState::Unknown;}}
- const StableTouchTransition transition=stableTouch_.update(raw);
+ if(interruptActive){uint16_t x,y;if(readPoint(x,y)){healthy_=true;validPoint=true;filter(x,y,lastX_,lastY_);raw=RawTouchState::Pressed;if(!stableTouch_.pressed()&&!pressCandidate_){pressCandidate_=true;pressX_=lastX_;pressY_=lastY_;}}else{healthy_=false;raw=RawTouchState::Unknown;}}
+ else if(!stableTouch_.pressed())pressCandidate_=false;
+ const StableTouchTransition transition=stableTouch_.update(raw,now);
  TouchEvent event{};
- if(transition==StableTouchTransition::Down)event=recognizer_.sample(true,true,lastX_,lastY_,now,zone(lastX_,lastY_));
- else if(transition==StableTouchTransition::Up){sampleCount_=0;event=recognizer_.sample(false,true,lastX_,lastY_,now,zone(lastX_,lastY_));}
+ if(transition==StableTouchTransition::Down){event=recognizer_.sample(true,true,pressX_,pressY_,now,zone(pressX_,pressY_));pressCandidate_=false;}
+ else if(transition==StableTouchTransition::Up){sampleCount_=0;pressCandidate_=false;event=recognizer_.sample(false,true,lastX_,lastY_,now,zone(lastX_,lastY_));}
  else if(stableTouch_.pressed()&&validPoint)event=recognizer_.sample(true,true,lastX_,lastY_,now,zone(lastX_,lastY_));
  event.sequenceId=stableTouch_.sequence();
  return event;

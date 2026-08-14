@@ -1,3 +1,4 @@
+- Simplified touch navigation to horizontal category swipes, center-tap menu opening, vertical-only menu scrolling, and direct 600 ms row holds.
 - Replaced the Makefile with a tab-free GNU Make 3.81-compatible lowercase makefile for macOS.
 - Added PlatformIO Make targets and suppressed top-header touch bounce across menu transitions.
 - Refactored the halo into category-owned event-driven palettes that enter, exit, and stop while expanded UI is visible.
