@@ -8,6 +8,7 @@
 #include "input/TouchController.h"
 #include "model/RigTypes.h"
 #include "network/RigApiClient.h"
+#include "network/LocalDeviceService.h"
 #include "storage/ConfigStore.h"
 #include "ui/RigUi.h"
 
@@ -35,6 +36,8 @@ class RigController {
   void handleTouch(uint32_t nowMs);
   void updateTelemetry(uint32_t nowMs);
   void requestApi(ControlAction action);
+  void handleUiCommand(const UiCommand &command, uint32_t nowMs);
+  void handleLocalRequest(uint32_t nowMs);
   float batteryVoltage() const;
   int batteryPercent(float volts) const;
 
@@ -43,6 +46,7 @@ class RigController {
   TouchController &touch_;
   RigApiClient &api_;
   RigUi &ui_;
+  LocalDeviceService localService_;
 
   RigConfig config_;
   StorageBootResult storage_{};
@@ -57,10 +61,16 @@ class RigController {
   bool wifiWasConnected_ = false;
   bool recordingObserved_ = false;
   uint32_t wifiAttemptAt_ = 0;
+  uint32_t wifiAttemptNumber_ = 0;
+  uint32_t lastWifiDiagnosticAt_ = 0;
+  uint32_t lastWifiAttemptDurationMs_ = 0;
+  int lastWifiStatus_ = -1;
   uint32_t lastWifiRetryAt_ = 0;
   uint32_t lastSnapshotAt_ = 0;
   uint32_t lastBatteryAt_ = 0;
   uint32_t recordingStartedAt_ = 0;
+  char hostname_[64] = {0};
+  WifiRetryState wifiRetry_{};
 };
 
 }  // namespace rig

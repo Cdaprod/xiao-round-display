@@ -1,4 +1,15 @@
+- Added independent DHCP hostname, mDNS discovery, and a redacted authenticated local HTTP status service.
+- Separated menu highlight, scroll, and hold activation; added circular-safe modal recovery and transactional keyboard editing.
 # Changelog
+
+# Unreleased
+
+- Added continuous, testable gesture recognition and inertial panel scrolling.
+- Added expandable category navigation, action panels, keyboard editing, and confirmations.
+- Added Wi-Fi retry diagnostics, asynchronous scanning, and NVS configuration overrides.
+- Pinned Arduino_GFX 1.6.0 and made the 40 MHz compatibility environment the default.
+- Split the Device page's SD-card and rig-configuration status indicators.
+- Close the status halo at the 360-degree boundary without removing segment overlap.
 
 ## 2.1.0 - 2026-08-11
 
@@ -23,3 +34,16 @@
 - Changed connected/no-session state to green `RIG READY` while keeping offline states amber.
 - Preserved `/rig.cfg`, Media Sync API routes, device headers, battery display, and session controls.
 - Added a 40 MHz non-DMA compatibility build environment.
+
+## Unreleased compositor redesign
+
+- Documented the gated single-owner presentation and motion architecture; no runtime behavior changed before physical baseline capture.
+- Fixed GCC 8/C++11 parsing of the ConfigStore default argument and ConfigStatus construction.
+- Replaced per-frame arc rasterization with precomputed annular pixel/angle LUTs and two-span halo transfers; added safe credential provenance diagnostics and Wi-Fi override clearing.
+- Repaired dirty-row transfers, coalesced halo deadlines, bounded 24 FPS touch feedback, and nonblocking Wi-Fi attempt diagnostics.
+- Fixed ESP32 GCC 8 compilation by explicitly constructing circular spans and normalizing span-width arithmetic to `int`.
+- Removed the persistent bottom category bar; each circular summary is now its category.
+- Added horizontal summary navigation, title/swipe/hold expansion, full circular panels, pinned back headers, and restrained action rows.
+- Replaced visible direct erase/redraw with a one-time allocated indexed compositor and circular scanline transfers.
+- Added shared round viewport geometry for rendering and hit testing, granular invalidation, render counters, and tactile perimeter feedback.
+- Integrated keyboard and confirmation modes into the same compositor while preserving panel scroll state.
