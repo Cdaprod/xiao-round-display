@@ -29,4 +29,8 @@
 - [x] Add deliberate header/at-top pull-down close rules and action tap cancellation.
 - [x] Add coordinate filtering, 30 ms invalid-sample grace, and arbitration host coverage.
 - [ ] Validate touch thresholds and menu persistence on physical XIAO ESP32-C3 hardware.
+- [x] Debounce touch into two-sample press and three-sample release sequences.
+- [x] Make holds one-shot and prevent live touches crossing menu transitions.
+- [x] Restrict category opening to the center control and row execution to a fresh 600 ms hold.
+- [ ] Physically verify top-edge holds, menu persistence, and single row execution.
 

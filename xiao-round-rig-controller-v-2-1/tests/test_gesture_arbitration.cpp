@@ -11,13 +11,14 @@ static GestureArbitrator menu(float offset=0, bool header=false, int action=-1) 
 int main() {
   { auto g=category(); assert(g.move(131,120,0,0,10)==GestureOwner::None); assert(g.release(131,120,0,0,-1)==GestureResolution::None); }
   { GestureArbitrator g; g.begin(StableLayer::Category,2,120,30,0,0,true,-1); assert(g.release(120,30,0,0,-1)==GestureResolution::OpenMenu); }
+  { GestureArbitrator g; g.begin(StableLayer::Category,2,120,30,0,0,false,-1); assert(g.release(120,30,0,0,-1)==GestureResolution::None); }
   { auto g=category(); assert(g.move(138,138,0,0,10)==GestureOwner::None); }
   { auto g=category(); assert(g.move(145,121,0,0,10)==GestureOwner::CategoryHorizontal); assert(g.move(121,80,0,0,20)==GestureOwner::CategoryHorizontal); }
   { auto g=category(); g.move(150,120,0,0,10); assert(g.release(150,80,0,-500,-1)==GestureResolution::None); }
-  { auto g=category(); g.move(120,90,0,-500,10); assert(g.session().categoryAtDown==2); assert(g.release(120,80,0,-500,-1)==GestureResolution::OpenMenu); }
+  { auto g=category(); assert(g.move(120,90,0,-500,10)==GestureOwner::None); assert(g.session().categoryAtDown==2); assert(g.release(120,80,0,-500,-1)==GestureResolution::None); }
   { auto g=category(); g.move(150,120,100,0,10); assert(g.release(150,120,100,0,-1)==GestureResolution::None); assert(g.session().categoryAtDown==2); }
   { auto g=category(); g.move(120,100,0,-50,10); assert(g.release(120,100,0,-50,-1)==GestureResolution::None); }
-  { auto g=category(); g.move(120,80,0,-500,10); assert(g.release(120,80,0,-500,-1)==GestureResolution::OpenMenu); assert(g.session().committed); }
+  { auto g=category(); g.move(120,80,0,-500,10); assert(g.release(120,80,0,-500,-1)==GestureResolution::None); assert(!g.session().committed); }
   { auto g=menu(40); assert(g.move(120,75,0,-200,10)==GestureOwner::MenuScroll); assert(g.release(120,70,0,-100,-1)==GestureResolution::KeepMenu); }
   { auto g=menu(40); assert(g.move(120,130,0,200,10)==GestureOwner::MenuScroll); assert(g.release(120,160,0,500,-1)==GestureResolution::KeepMenu); }
   { auto g=menu(1); assert(g.move(120,120,0,200,10)==GestureOwner::MenuScroll); assert(g.move(120,170,0,500,20)==GestureOwner::MenuScroll); }

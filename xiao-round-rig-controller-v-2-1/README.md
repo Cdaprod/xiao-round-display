@@ -182,6 +182,7 @@ g++ -std=c++17 -Wall -Wextra -Werror tests/test_core.cpp -o /tmp/rig-core-tests 
 g++ -std=c++17 -Wall -Wextra -Werror tests/test_state.cpp -o /tmp/rig-state-tests && /tmp/rig-state-tests
 g++ -std=c++17 -Wall -Wextra -Werror tests/test_gesture_arbitration.cpp -o /tmp/rig-gesture-arbitration-tests && /tmp/rig-gesture-arbitration-tests
 g++ -std=c++17 -Wall -Wextra -Werror tests/test_selection_and_recovery.cpp -o /tmp/rig-selection-tests && /tmp/rig-selection-tests
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_touch_lifecycle.cpp -o /tmp/rig-touch-lifecycle-tests && /tmp/rig-touch-lifecycle-tests
 ```
 
 ## Physical validation

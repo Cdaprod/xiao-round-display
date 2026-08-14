@@ -23,7 +23,7 @@ class SelectionModel {
   }
 
   void moved(int totalDx, int totalDy) {
-    if (absolute(totalDx) > 8 || absolute(totalDy) > 8) cancelHold();
+    if (absolute(totalDx) > 7 || absolute(totalDy) > 7) cancelHold();
   }
 
   int update(uint32_t nowMs, bool sameRow, bool actionStillValid) {

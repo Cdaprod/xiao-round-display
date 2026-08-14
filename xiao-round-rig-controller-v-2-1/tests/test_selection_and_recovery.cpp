@@ -22,7 +22,7 @@ int main() {
   assert(selection.update(1100, true, true) == -1);
 
   selection.begin(3, 1200, true);
-  selection.moved(9, 0);
+  selection.moved(8, 0);
   assert(selection.update(2000, true, true) == -1);
   selection.release(4, 2000, true);
   selection.begin(4, 2100, selection.settled(2100));

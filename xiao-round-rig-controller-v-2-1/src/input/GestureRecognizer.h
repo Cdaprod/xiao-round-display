@@ -6,6 +6,7 @@ enum class TouchKind : uint8_t { None, PressStarted, DragStarted, DragMoved, Swi
 enum class TouchZone : uint8_t { Outside, Center, Category };
 struct TouchEvent {
   TouchKind kind = TouchKind::None; TouchZone zone = TouchZone::Outside;
+  uint32_t sequenceId=0;
   uint16_t startX=0,startY=0,x=0,y=0,previousX=0,previousY=0;
   int16_t totalX=0,totalY=0,deltaX=0,deltaY=0,velocityX=0,velocityY=0;
   uint32_t durationMs=0,timestampMs=0;

@@ -76,8 +76,6 @@ class GestureArbitrator {
     const bool vertical = ay >= 16 && ay * 100 >= ax * 145;
     if (session_.layerAtDown == StableLayer::Category) {
       if (horizontal) session_.gestureOwner = GestureOwner::CategoryHorizontal;
-      else if (vertical && session_.totalDy < 0)
-        session_.gestureOwner = GestureOwner::CategoryMenuOpen;
     } else if (vertical) {
       if (session_.totalDy > 0 &&
           (session_.startedInMenuHeader ||
