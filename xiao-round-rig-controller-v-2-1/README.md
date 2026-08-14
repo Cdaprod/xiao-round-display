@@ -180,6 +180,7 @@ The independent Wi-Fi stage reports unconfigured, scanning, connecting, authenti
 ```bash
 g++ -std=c++17 -Wall -Wextra -Werror tests/test_core.cpp -o /tmp/rig-core-tests && /tmp/rig-core-tests
 g++ -std=c++17 -Wall -Wextra -Werror tests/test_state.cpp -o /tmp/rig-state-tests && /tmp/rig-state-tests
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_gesture_arbitration.cpp -o /tmp/rig-gesture-arbitration-tests && /tmp/rig-gesture-arbitration-tests
 ```
 
 ## Physical validation
