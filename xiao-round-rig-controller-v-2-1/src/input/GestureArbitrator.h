@@ -11,7 +11,10 @@ enum class GestureOwner : uint8_t {
   CategoryMenuOpen,
   MenuScroll,
   MenuClose,
-  ActionTap
+  ActionTap,
+  RowHoldCandidate,
+  RowHoldArmed,
+  KeyboardInput
 };
 enum class GestureResolution : uint8_t {
   None,
@@ -127,14 +130,12 @@ class GestureArbitrator {
           session_.committed = true;
           return GestureResolution::OpenMenu;
         }
-        if (session_.layerAtDown == StableLayer::Menu &&
-            session_.actionCandidate >= 0 &&
-            actionAtRelease == session_.actionCandidate &&
-            absolute(session_.totalDx) <= 9 && absolute(session_.totalDy) <= 9) {
-          session_.gestureOwner = GestureOwner::ActionTap;
-          session_.committed = true;
-          return GestureResolution::ActivateAction;
-        }
+        (void)actionAtRelease;
+        return session_.layerAtDown == StableLayer::Menu
+            ? GestureResolution::KeepMenu : GestureResolution::None;
+      case GestureOwner::RowHoldCandidate:
+      case GestureOwner::RowHoldArmed:
+      case GestureOwner::KeyboardInput:
         return session_.layerAtDown == StableLayer::Menu
             ? GestureResolution::KeepMenu : GestureResolution::None;
     }

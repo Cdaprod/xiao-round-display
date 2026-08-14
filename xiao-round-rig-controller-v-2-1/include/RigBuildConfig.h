@@ -14,6 +14,10 @@
 #define RIG_HALO_TARGET_FPS 30
 #endif
 
+#ifndef RIG_UI_SHOW_SAFE_AREAS
+#define RIG_UI_SHOW_SAFE_AREAS 0
+#endif
+
 namespace rig::build {
 
 constexpr int kScreenSize = 240;

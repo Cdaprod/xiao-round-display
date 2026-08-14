@@ -5,6 +5,16 @@
 
 namespace rig {
 
+struct Rect {
+  int16_t x;
+  int16_t y;
+  int16_t width;
+  int16_t height;
+  constexpr Rect(int16_t xValue = 0, int16_t yValue = 0,
+                 int16_t widthValue = 0, int16_t heightValue = 0)
+      : x(xValue), y(yValue), width(widthValue), height(heightValue) {}
+};
+
 struct HorizontalSpan {
   int16_t left;
   int16_t right;
@@ -53,6 +63,19 @@ class CircularViewport {
   bool contains(int x, int y) const {
     const HorizontalSpan current = span(y);
     return current.valid() && x >= current.left && x <= current.right;
+  }
+
+  bool containsRect(const Rect &bounds) const {
+    if (bounds.width <= 0 || bounds.height <= 0) return false;
+    const int right = bounds.x + bounds.width - 1;
+    const int bottom = bounds.y + bounds.height - 1;
+    if (bounds.y < 0 || bottom >= 240) return false;
+    for (int y = bounds.y; y <= bottom; ++y) {
+      const HorizontalSpan current = span(y);
+      if (!current.valid() || bounds.x < current.left || right > current.right)
+        return false;
+    }
+    return true;
   }
 
   int16_t radius() const { return radius_; }

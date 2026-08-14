@@ -25,7 +25,7 @@ int main() {
   { auto g=menu(0,true); g.move(120,90,0,500,10); assert(g.release(120,90,0,500,-1)==GestureResolution::CloseMenu); assert(g.session().categoryAtDown==2); }
   { auto g=menu(); assert(g.move(170,102,500,0,10)==GestureOwner::None); assert(g.release(170,102,500,0,-1)==GestureResolution::KeepMenu); }
   { auto g=menu(0,false,3); g.move(131,100,0,0,10); assert(g.release(131,100,0,0,3)!=GestureResolution::ActivateAction); }
-  { auto g=menu(0,false,3); assert(g.release(120,100,0,0,3)==GestureResolution::ActivateAction); assert(g.release(120,100,0,0,3)==GestureResolution::None); }
+  { auto g=menu(0,false,3); assert(g.release(120,100,0,0,3)==GestureResolution::KeepMenu); assert(g.release(120,100,0,0,3)==GestureResolution::None); }
   { auto g=category(); assert(g.cancel()==GestureResolution::Cancelled); assert(g.release(120,120,0,0,-1)==GestureResolution::None); }
   { auto g=category(); g.move(70,120,-500,0,10); assert(g.release(70,120,-500,0,-1)==GestureResolution::CategoryNext); }
   return 0;

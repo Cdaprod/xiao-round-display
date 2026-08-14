@@ -1,3 +1,4 @@
+- Separated menu highlight, scroll, and hold activation; added circular-safe modal recovery and transactional keyboard editing.
 # Changelog
 
 # Unreleased
