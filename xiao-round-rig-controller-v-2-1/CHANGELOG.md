@@ -1,3 +1,4 @@
+- Replaced the Makefile with a tab-free GNU Make 3.81-compatible lowercase makefile for macOS.
 - Added PlatformIO Make targets and suppressed top-header touch bounce across menu transitions.
 - Refactored the halo into category-owned event-driven palettes that enter, exit, and stop while expanded UI is visible.
 - Added independent DHCP hostname, mDNS discovery, and a redacted authenticated local HTTP status service.

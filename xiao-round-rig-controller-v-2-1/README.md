@@ -244,6 +244,8 @@ The summary halo now uses category palettes, preserves angular phase across cate
 
 ### Make targets
 
+The lowercase `makefile` uses GNU Make 3.81-compatible semicolon recipes, contains no tabs, and does not require `.RECIPEPREFIX`.
+
 Run these commands from the PlatformIO project root:
 
 ```sh

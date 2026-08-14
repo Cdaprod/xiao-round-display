@@ -1,3 +1,6 @@
+- [x] Replace `.RECIPEPREFIX` recipes with a tab-free GNU Make 3.81-compatible lowercase makefile.
+- [x] Verify help, clean, build, upload, flash, monitor, size, overrides, and missing-port failure paths.
+
 - [x] Add project-root Make targets for clean, build, upload, flash, monitor, and size.
 - [x] Add a 40 ms release-stabilized input barrier around menu open/close transitions.
 - [ ] Verify the top-header open/close bounce fix on physical touch hardware.
