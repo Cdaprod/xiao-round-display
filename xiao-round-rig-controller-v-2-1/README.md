@@ -241,3 +241,23 @@ g++ -std=c++17 -Wall -Wextra -Werror tests/test_network_service.cpp -o /tmp/rig-
 ### Event-driven category halo
 
 The summary halo now uses category palettes, preserves angular phase across category changes, fades out before expanded views, and schedules no frames while menus or keyboards are visible. Operational state is rendered as localized joining/error/recording overlays rather than replacing the full category palette. See `docs/architecture/HALO_PRESENTATION.md`.
+
+### Make targets
+
+Run these commands from the PlatformIO project root:
+
+```sh
+make help
+make clean
+make build
+make flash
+make flash-monitor
+```
+
+The compatibility environment and `/dev/cu.usbmodem2101` are defaults. Override them when needed:
+
+```sh
+make ports
+make flash-monitor PORT=/dev/cu.usbmodem1101
+make build ENV=seeed_xiao_esp32c3
+```

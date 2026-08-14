@@ -1,3 +1,7 @@
+- [x] Add project-root Make targets for clean, build, upload, flash, monitor, and size.
+- [x] Add a 40 ms release-stabilized input barrier around menu open/close transitions.
+- [ ] Verify the top-header open/close bounce fix on physical touch hardware.
+
 - [x] Make halo palettes category-owned with localized operational overlays.
 - [x] Add Entering/Ambient/Touching/Holding/Success/Failure/Exiting/Hidden lifecycle.
 - [x] Stop halo scheduling and transfers while menus and keyboards own the view.
