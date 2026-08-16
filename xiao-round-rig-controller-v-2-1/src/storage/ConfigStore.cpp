@@ -2,6 +2,7 @@
 
 #include <SD.h>
 #include <SPI.h>
+#include <Preferences.h>
 
 #include "RigBuildConfig.h"
 
@@ -28,16 +29,21 @@ StorageBootResult ConfigStore::loadAtBoot(RigConfig &config) {
 
   if (!result.sdReady) {
     copyText(result.message, "SD NOT FOUND");
+    result.nvsOverrides = loadOverrides(config);
     SPI.end();
     return result;
   }
 
-  if (!SD.exists("/rig.cfg")) {
+  result.configFound = SD.exists("/rig.cfg");
+  if (!result.configFound) {
     result.templateCreated = writeTemplate();
   }
 
-  result.configLoaded = loadConfigFile(config);
-  if (result.configLoaded) {
+  result.configParsed = loadConfigFile(config);
+  if (result.configParsed && config.wifiSsid.length()) config.credentialSource = CredentialSource::SdCard;
+  result.configLoaded = result.configParsed;
+  result.nvsOverrides = loadOverrides(config);
+  if (result.configParsed) {
     copyText(result.message, "CONFIG READY");
     appendBootEvent("config_ready", config.nodeId.c_str());
   } else if (result.templateCreated) {
@@ -77,7 +83,7 @@ bool ConfigStore::loadConfigFile(RigConfig &config) {
   }
   if (config.nodeId.startsWith("CHANGE_ME")) config.nodeId = "";
   if (config.bearerToken.startsWith("CHANGE_ME")) config.bearerToken = "";
-  return config.wifiConfigured();
+  return true;
 }
 
 bool ConfigStore::writeTemplate() {
@@ -114,5 +120,37 @@ void ConfigStore::assignValue(
     config.pollMs = constrain(value.toInt(), 500L, 10000L);
   }
 }
+
+bool ConfigStore::loadOverrides(RigConfig &config) {
+  Preferences prefs; if (!prefs.begin("rig-config", true)) return false;
+  const bool active = prefs.getBool("active", false);
+  const bool wifiActive = prefs.isKey("ssid") || prefs.isKey("pass");
+  if (prefs.isKey("ssid")) config.wifiSsid = prefs.getString("ssid", config.wifiSsid);
+  if (prefs.isKey("pass")) config.wifiPassword = prefs.getString("pass", config.wifiPassword);
+  if (prefs.isKey("api")) config.apiBase = prefs.getString("api", config.apiBase);
+  if (prefs.isKey("node")) config.nodeId = prefs.getString("node", config.nodeId);
+  if (prefs.isKey("token")) config.bearerToken = prefs.getString("token", config.bearerToken);
+  config.configGeneration = prefs.getUInt("generation", 0);
+  if (wifiActive) config.credentialSource = CredentialSource::NvsOverride;
+  prefs.end(); return active;
+}
+
+bool ConfigStore::saveOverride(ConfigField field, const char *value, RigConfig &config) {
+  if (!value) return false; String candidate(value);
+  if (field != ConfigField::WifiPassword) candidate.trim();
+  if (field == ConfigField::ApiBase && !(candidate.startsWith("http://") || candidate.startsWith("https://"))) return false;
+  Preferences prefs; if (!prefs.begin("rig-config", false)) return false;
+  const char *key = field==ConfigField::WifiSsid?"ssid":field==ConfigField::WifiPassword?"pass":field==ConfigField::ApiBase?"api":field==ConfigField::NodeId?"node":"token";
+  const String current = field==ConfigField::WifiSsid?config.wifiSsid:field==ConfigField::WifiPassword?config.wifiPassword:field==ConfigField::ApiBase?config.apiBase:field==ConfigField::NodeId?config.nodeId:config.bearerToken;
+  if (current == candidate && prefs.getBool("active", false)) { prefs.end(); return true; }
+  const uint32_t generation = prefs.getUInt("generation", 0) + 1;
+  const bool ok = prefs.putString(key, candidate) > 0 && prefs.putBool("active", true) && prefs.putUInt("generation", generation) > 0; prefs.end();
+  if (ok) { config.configGeneration=generation;if(field==ConfigField::WifiSsid||field==ConfigField::WifiPassword)config.credentialSource=CredentialSource::RuntimeEdit;if(field==ConfigField::WifiSsid)config.wifiSsid=candidate;else if(field==ConfigField::WifiPassword)config.wifiPassword=candidate;else if(field==ConfigField::ApiBase)config.apiBase=candidate;else if(field==ConfigField::NodeId)config.nodeId=candidate;else config.bearerToken=candidate; }
+  return ok;
+}
+
+bool ConfigStore::clearWifiOverrides(RigConfig&config){Preferences p;if(!p.begin("rig-config",false))return false;const bool had=p.isKey("ssid")||p.isKey("pass");p.remove("ssid");p.remove("pass");p.putUInt("generation",p.getUInt("generation",0)+1);p.end();if(had){config.wifiSsid="";config.wifiPassword="";config.credentialSource=CredentialSource::Defaults;}return true;}
+
+bool ConfigStore::clearOverrides(){Preferences p;if(!p.begin("rig-config",false))return false;const bool ok=p.clear();p.end();return ok;}
 
 }  // namespace rig

@@ -112,9 +112,6 @@ ApiUpdate RigApiClient::sendControl(
     ApiUpdate update = errorUpdate(
         RigState::Error,
         statusCode > 0 ? String("CONTROL HTTP ") + statusCode : "CONTROL FAILED");
-    if (response.length()) {
-      Serial.printf("control response: %.160s\n", response.c_str());
-    }
     return update;
   }
 

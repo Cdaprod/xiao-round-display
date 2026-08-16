@@ -158,3 +158,109 @@ src/
 - status text redraws only when the screen model changes;
 - ring motion uses elapsed time rather than frame count;
 - the render loop performs no heap allocation.
+
+## Expandable interaction
+
+The entire circular summary is the active category. Tap empty space to cycle, swipe horizontally for the previous or next category, and tap the title, swipe up, or hold for 450 ms to expand. Expanded panels follow vertical drags, coast with time-based friction, resist overscroll, and collapse after a downward swipe at the top or a 36 px pull. A 700 ms center hold always cancels overlays and returns to Status.
+
+Gesture defaults are 8 px tap tolerance, 14 px drag activation, 180 px/s swipe velocity, 450 ms expansion hold, and 700 ms center return. Recording actions are accepted only from clean taps on enabled action rows.
+
+## On-device configuration and keyboard
+
+Configuration precedence is safe built-in defaults, `/rig.cfg` imported from SD during boot, then NVS overrides saved by the UI. The display never writes SD while LCD SPI owns the bus. `RELOAD SD CONFIG` and `CLEAR SAVED OVERRIDES` clear NVS and reboot so boot-time SD import remains safe.
+
+Editable rows open a compact keyboard only for the duration of editing. It provides lowercase, uppercase, number/symbol layouts, Backspace, Space, Clear, Cancel, Confirm, and temporary reveal. Passwords and bearer tokens remain masked and are never written to Serial. API URLs must start with `http://` or `https://`.
+
+## Wi-Fi diagnostics and actions
+
+The independent Wi-Fi stage reports unconfigured, scanning, connecting, authenticating, waiting for IP, connected, AP not found, authentication failure, timeout, DHCP failure, disconnected, and retry countdown states. A failure dwells before countdown; `RETRY NOW` bypasses it. Network actions include asynchronous scan, SSID selection/editing, password/API editing, API test, disconnect, and confirmed forget.
+
+## Host tests
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_core.cpp -o /tmp/rig-core-tests && /tmp/rig-core-tests
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_state.cpp -o /tmp/rig-state-tests && /tmp/rig-state-tests
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_gesture_arbitration.cpp -o /tmp/rig-gesture-arbitration-tests && /tmp/rig-gesture-arbitration-tests
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_selection_and_recovery.cpp -o /tmp/rig-selection-tests && /tmp/rig-selection-tests
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_touch_lifecycle.cpp -o /tmp/rig-touch-lifecycle-tests && /tmp/rig-touch-lifecycle-tests
+```
+
+## Physical validation
+
+Discover the current macOS port rather than assuming its suffix:
+
+```bash
+pio device list
+pio run -e seeed_xiao_esp32c3_compat --target clean
+pio run -e seeed_xiao_esp32c3_compat --target upload --upload-port <detected-port>
+pio device monitor --port <detected-port> --baud 115200 --filter time
+```
+
+Verify: specific boot Wi-Fi stage; stable failure reason and retry countdown; Retry Now; nonblocking scan; tap cycle; swipe selection; tap/hold expansion; inertial scrolling; top swipe collapse; center return; keyboard lifecycle and secret masking; NVS persistence; separate SD/file/parse/field status; recording drag safety; closed animated halo; compatibility stability; and secret-free Serial output.
+
+## Known limitations
+
+Physical touch orientation and the optional DMA renderer require device validation. Network selection chooses the strongest displayed scan result; edit SSID for another result. SD reload intentionally reboots because SD and LCD share SPI. Compatibility mode at 40 MHz/24 FPS is the default; DMA at 80 MHz/30 FPS remains experimental.
+
+## Composited round interface
+
+Each full circular summary is its category; there is no persistent category bar. Tap empty summary space to advance, swipe horizontally to move backward or forward, and tap the title, swipe up, or hold for 450 ms to expand. Expanded views use a pinned `< CATEGORY` header and the complete 108 px content radius. Tap the header, swipe down at the top, or pull down 36 px to collapse. A 700 ms center hold always returns to Status.
+
+Non-halo content is drawn to a one-time allocated 240×240 8-bit indexed surface and then transferred as legal circular scanline spans. The halo independently owns its perimeter. This prevents users from seeing erase/redraw phases and prevents rectangular or stale pixels outside the circular viewport. Startup logs indexed-surface heap use; a clipped direct-span fallback is retained for allocation failure. Rendering architecture and ownership are documented in `docs/architecture/UI_COMPOSITOR.md`.
+
+Contact feedback starts on touch-down: the contacted title or row is accented and the halo blooms at the touch angle with an opposite-side echo. Hold progress grows before activation; drag cancels tap feedback. Content diagnostics are rate-limited and include redraw counts, composition/transfer time, maximum touch interval, and minimum heap.
+
+### Compositor host test
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_ui_architecture.cpp -o /tmp/rig-ui-tests && /tmp/rig-ui-tests
+```
+
+### Physical compositor acceptance
+
+1. No bottom category bar is visible.
+2. Each circular summary is the category and tap cycles summaries.
+3. Horizontal swipe moves previous/next; title tap, swipe up, and visible hold expand.
+4. Expanded content uses the full round viewport and every final action scrolls fully into view.
+5. Header and top swipe collapse; center long-press returns to Status.
+6. The center remains solid for 30 seconds while halo and retry countdown continue.
+7. No stale text, rectangular edges, blue button stack, or black transition frame appears.
+8. Contact feedback is visible beyond the thumb before release; drags never confirm taps.
+9. Keyboard and confirmation transitions leave no stale pixels and restore panel scroll.
+10. Halo remains closed/fluid, retries/scans remain responsive, and Serial contains no credentials.
+
+### Local LAN service
+
+After DHCP succeeds, the controller serves `GET /health`, `GET /api/status`, and redacted `GET /api/config` on port 80 and advertises `cda-rig-<node-id>.local`. Authenticated `POST /api/wifi/retry`, `POST /api/api/retry`, and bounded single-field `POST /api/config` requests are processed nonblockingly. See `docs/network/LOCAL_DEVICE_SERVICE.md`.
+
+Host policy test:
+
+```sh
+g++ -std=c++17 -Wall -Wextra -Werror tests/test_network_service.cpp -o /tmp/rig-network-tests && /tmp/rig-network-tests
+```
+
+### Event-driven category halo
+
+The summary halo now uses category palettes, preserves angular phase across category changes, fades out before expanded views, and schedules no frames while menus or keyboards are visible. Operational state is rendered as localized joining/error/recording overlays rather than replacing the full category palette. See `docs/architecture/HALO_PRESENTATION.md`.
+
+### Make targets
+
+The lowercase `makefile` uses GNU Make 3.81-compatible semicolon recipes, contains no tabs, and does not require `.RECIPEPREFIX`.
+
+Run these commands from the PlatformIO project root:
+
+```sh
+make help
+make clean
+make build
+make flash
+make flash-monitor
+```
+
+The compatibility environment and `/dev/cu.usbmodem2101` are defaults. Override them when needed:
+
+```sh
+make ports
+make flash-monitor PORT=/dev/cu.usbmodem1101
+make build ENV=seeed_xiao_esp32c3
+```
