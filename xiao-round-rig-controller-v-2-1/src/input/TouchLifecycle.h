@@ -4,8 +4,18 @@
 
 namespace rig {
 
-enum class RawTouchState : uint8_t { Unknown, Released, Pressed };
-enum class StableTouchTransition : uint8_t { None, Down, Up };
+enum class RawTouchState : uint8_t {
+  Unknown,
+  Released,
+  Pressed
+};
+
+enum class StableTouchTransition : uint8_t {
+  None,
+  Down,
+  Up
+};
+
 enum class TouchOwner : uint8_t {
   None,
   CategoryPager,
@@ -16,6 +26,7 @@ enum class TouchOwner : uint8_t {
   Keyboard,
   Confirmation
 };
+
 enum class TouchPhase : uint8_t {
   Idle,
   Pressed,
@@ -26,63 +37,109 @@ enum class TouchPhase : uint8_t {
   WaitForRelease
 };
 
-// Debounces by elapsed time so behavior is independent of polling frequency.
 class StableTouchFilter {
  public:
-  static constexpr uint32_t kPressDebounceMs = 20;
-  static constexpr uint32_t kReleaseDebounceMs = 70;
+  static constexpr uint32_t kReleaseDebounceMs = 60;
   static constexpr uint32_t kUnknownGraceMs = 40;
 
-  StableTouchTransition update(RawTouchState raw, uint32_t nowMs) {
+  StableTouchTransition update(
+      RawTouchState raw,
+      uint32_t nowMs) {
+
+    // A valid CHSC6X coordinate starts contact immediately.
+    if (raw == RawTouchState::Pressed) {
+      unknownActive_ = false;
+      releaseCandidate_ = false;
+
+      if (!pressed_) {
+        pressed_ = true;
+        ++sequence_;
+        holdFired_ = false;
+
+        return StableTouchTransition::Down;
+      }
+
+      return StableTouchTransition::None;
+    }
+
+    // Failed read while already touching:
+    // tolerate it instead of immediately releasing.
     if (raw == RawTouchState::Unknown) {
-      if (!unknownActive_) { unknownActive_ = true; unknownAtMs_ = nowMs; }
-      if (pressed_ && elapsed(nowMs, unknownAtMs_) >= kUnknownGraceMs)
-        raw = RawTouchState::Released;
-      else
+      if (!pressed_) {
         return StableTouchTransition::None;
+      }
+
+      if (!unknownActive_) {
+        unknownActive_ = true;
+        unknownAtMs_ = nowMs;
+        return StableTouchTransition::None;
+      }
+
+      if (elapsed(nowMs, unknownAtMs_) < kUnknownGraceMs) {
+        return StableTouchTransition::None;
+      }
+
+      // Unknown has persisted long enough to become a release candidate.
+      raw = RawTouchState::Released;
     } else {
       unknownActive_ = false;
     }
-    if (raw == RawTouchState::Pressed) {
-      releaseCandidate_ = false;
-      if (!pressCandidate_) { pressCandidate_ = true; pressAtMs_ = nowMs; }
-      if (!pressed_ && elapsed(nowMs, pressAtMs_) >= kPressDebounceMs) {
-        pressed_ = true;
-        pressCandidate_ = false;
-        ++sequence_;
-        holdFired_ = false;
-        return StableTouchTransition::Down;
+
+    if (raw == RawTouchState::Released) {
+      if (!pressed_) {
+        releaseCandidate_ = false;
+        return StableTouchTransition::None;
       }
-      return StableTouchTransition::None;
+
+      if (!releaseCandidate_) {
+        releaseCandidate_ = true;
+        releaseAtMs_ = nowMs;
+        return StableTouchTransition::None;
+      }
+
+      if (elapsed(nowMs, releaseAtMs_) >= kReleaseDebounceMs) {
+        pressed_ = false;
+        releaseCandidate_ = false;
+        unknownActive_ = false;
+        holdFired_ = false;
+
+        return StableTouchTransition::Up;
+      }
     }
-    pressCandidate_ = false;
-    if (!releaseCandidate_) { releaseCandidate_ = true; releaseAtMs_ = nowMs; }
-    if (pressed_ && elapsed(nowMs, releaseAtMs_) >= kReleaseDebounceMs) {
-      pressed_ = false;
-      releaseCandidate_ = false;
-      holdFired_ = false;
-      return StableTouchTransition::Up;
-    }
+
     return StableTouchTransition::None;
   }
 
-  bool pressed() const { return pressed_; }
-  uint32_t sequence() const { return sequence_; }
+  bool pressed() const {
+    return pressed_;
+  }
+
+  uint32_t sequence() const {
+    return sequence_;
+  }
+
   bool fireHoldOnce() {
-    if (!pressed_ || holdFired_) return false;
+    if (!pressed_ || holdFired_) {
+      return false;
+    }
+
     holdFired_ = true;
     return true;
   }
 
  private:
-  static uint32_t elapsed(uint32_t now, uint32_t then) { return now - then; }
+  static uint32_t elapsed(
+      uint32_t now,
+      uint32_t then) {
+    return now - then;
+  }
+
   uint32_t sequence_ = 0;
-  uint32_t pressAtMs_ = 0;
   uint32_t releaseAtMs_ = 0;
   uint32_t unknownAtMs_ = 0;
+
   bool pressed_ = false;
   bool holdFired_ = false;
-  bool pressCandidate_ = false;
   bool releaseCandidate_ = false;
   bool unknownActive_ = false;
 };
