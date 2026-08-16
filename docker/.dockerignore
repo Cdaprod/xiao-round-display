@@ -1,0 +1,6 @@
+.git
+.pio
+.vscode
+__pycache__
+*.pyc
+upload

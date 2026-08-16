@@ -1,0 +1,36 @@
+services:
+  firmware:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    working_dir: /workspace
+    tty: true
+    stdin_open: true
+    environment:
+      PIO_ENV: ${PIO_ENV:-xiao_esp32c3}
+      PIO_PORT: /dev/ttyACM0
+      PIO_BAUD: ${PIO_BAUD:-115200}
+      PIO_MONITOR_FILTERS: ${PIO_MONITOR_FILTERS:-time,esp32_exception_decoder}
+      PIO_WATCH_INTERVAL: ${PIO_WATCH_INTERVAL:-0.35}
+    volumes:
+      - .:/workspace
+      - platformio-core:/root/.platformio
+    devices:
+      - ${SERIAL_DEVICE:-/dev/ttyACM0}:/dev/ttyACM0
+
+  build-only:
+    profiles: ["build"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    working_dir: /workspace
+    environment:
+      PIO_ENV: ${PIO_ENV:-xiao_esp32c3}
+    volumes:
+      - .:/workspace
+      - platformio-core:/root/.platformio
+    command: ["sh", "-c", "pio run --environment \"$${PIO_ENV}\""]
+
+volumes:
+  platformio-core:
